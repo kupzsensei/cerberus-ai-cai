@@ -13,12 +13,13 @@ services:
       - app-network
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        - VITE_API_URL=http://backend:8000
     container_name: pdf_frontend
     ports:
       - "3500:80"
-    environment:
-      - VITE_API_URL=http://backend:8000
     depends_on:
       - backend
     networks:
