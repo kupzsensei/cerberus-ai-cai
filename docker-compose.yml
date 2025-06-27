@@ -5,9 +5,10 @@ services:
     ports:
       - "8001:8000"
     volumes:
-      - uploaded_pdfs:/app/uploaded_pdfs # Persist uploaded files
-      - logs:/app/logs # Persist log files
-      - database:/app/tasks.db # Persist the SQLite database file
+      # Mount directories instead of files for reliability
+      - uploaded_pdfs:/app/uploaded_pdfs
+      - logs:/app/logs
+      - database_data:/app/database  # <-- CHANGED THIS LINE
     networks:
       - app-network
 
@@ -15,12 +16,11 @@ services:
     build: ./frontend
     container_name: pdf_frontend
     ports:
-      - "3500:80" # Map host port 3000 to container port 80 (Nginx)
+      - "3500:80"
     environment:
-      # This tells the frontend how to reach the backend service
       - VITE_API_URL=http://backend:8000
     depends_on:
-      - backend # Ensures the backend is started before the frontend
+      - backend
     networks:
       - app-network
 
@@ -31,4 +31,4 @@ networks:
 volumes:
   uploaded_pdfs:
   logs:
-  database:
+  database_data:
