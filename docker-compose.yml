@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build: ./backend
@@ -7,9 +5,9 @@ services:
     ports:
       - "8001:8000"
     volumes:
-      - uploaded_pdfs:/app/uploaded_pdfs  # Persist uploaded files
-      - logs:/app/logs                    # Persist log files
-      - database:/app/tasks.db            # Persist the SQLite database file
+      - uploaded_pdfs:/app/uploaded_pdfs # Persist uploaded files
+      - logs:/app/logs # Persist log files
+      - database:/app/tasks.db # Persist the SQLite database file
     networks:
       - app-network
 
