@@ -1,3 +1,5 @@
+# docker-compose.yml
+
 services:
   backend:
     build: ./backend
@@ -5,16 +7,15 @@ services:
     ports:
       - "8001:8000"
     volumes:
-      # Mount directories instead of files for reliability
       - uploaded_pdfs:/app/uploaded_pdfs
       - logs:/app/logs
-      - database_data:/app/database  # <-- CHANGED THIS LINE
+      - database_data:/app/database
     networks:
       - app-network
 
   frontend:
-    build:
-      context: ./frontend # We just need the context now
+    # We only need to define the build context now
+    build: ./frontend
     container_name: pdf_frontend
     ports:
       - "3500:80"
