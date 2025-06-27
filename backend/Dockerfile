@@ -1,30 +1,30 @@
+# backend/Dockerfile
+
 # Use an official Python runtime as a parent image
 FROM python:3.11-slim
 
 # Set the working directory in the container
 WORKDIR /app
 
-# --- Install System Dependencies ---
+# Install System Dependencies
 RUN apt-get update && apt-get install -y tesseract-ocr && \
     rm -rf /var/lib/apt/lists/*
 
-# --- Create a non-root user to run the application ---
-# Create a new group named 'appgroup' and a new user named 'appuser'
+# Create a non-root user to run the application
 RUN groupadd -r appgroup && useradd --no-log-init -r -g appgroup appuser
 
-# Copy the dependencies file to the working directory
+# Copy and install dependencies
 COPY requirements.txt .
-
-# Install Python Dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application's code
-# We change the ownership of the copied files to our new user
-COPY --chown=appuser:appgroup . .
+# Copy the application's code
+COPY . .
 
-# --- Set Correct Permissions ---
-# Ensure the 'appuser' owns the entire /app directory, including where volumes will be mounted
-RUN chown -R appuser:appgroup /app
+# --- Create directories for volumes and set permissions ---
+# Create the directories that our volumes will mount to
+RUN mkdir -p logs uploaded_pdfs database && \
+    # Give ownership of these directories and all app files to our user
+    chown -R appuser:appgroup /app
 
 # Switch to the non-root user
 USER appuser
