@@ -1,0 +1,340 @@
+:root {
+  --primary-bg: #1a1a2e;
+  --secondary-bg: #16213e;
+  --sidebar-bg: #0f3460;
+  --accent-color: #e94560;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0a0;
+  --border-color: #535353;
+  --dropzone-bg: #2a2a3e;
+  --success: #28a745;
+  --in-progress: #ffc107;
+  --failed: #dc3545;
+  --pending: #6c757d;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--primary-bg);
+  color: var(--text-primary);
+}
+
+.app-container {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 250px;
+  background-color: var(--sidebar-bg);
+  padding: 20px;
+  color: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar h2 {
+  color: var(--accent-color);
+  border-bottom: 2px solid var(--accent-color);
+  padding-bottom: 10px;
+}
+
+.sidebar nav ul {
+  list-style: none;
+  padding: 0;
+}
+
+.sidebar nav li a {
+  color: var(--text-primary);
+  text-decoration: none;
+  display: block;
+  padding: 12px 15px;
+  border-radius: 5px;
+  margin-bottom: 5px;
+  transition: background-color 0.2s;
+}
+
+.sidebar nav li a:hover,
+.sidebar nav li a.active {
+  background-color: var(--secondary-bg);
+}
+
+.main-content {
+  flex-grow: 1;
+  padding: 20px 40px;
+}
+
+.page-content h1 {
+  color: var(--accent-color);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+}
+
+/* --- Upload Page --- */
+.dropzone {
+  border: 2px dashed var(--border-color);
+  border-radius: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  background-color: var(--dropzone-bg);
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.dropzone.active,
+.dropzone:hover {
+  border-color: var(--accent-color);
+  background-color: var(--secondary-bg);
+}
+
+.file-list {
+  margin-top: 20px;
+}
+
+.file-list ul {
+  list-style: none;
+  padding: 0;
+}
+
+.file-list li {
+  background-color: var(--secondary-bg);
+  padding: 8px 12px;
+  border-radius: 5px;
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.file-list li button {
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.prompt-area {
+  margin-top: 20px;
+}
+
+.prompt-area label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: bold;
+}
+
+textarea {
+  width: 100%;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border-color);
+  background-color: var(--dropzone-bg);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+button {
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: bold;
+  /* margin-top: 20px; */
+  transition: background-color 0.2s;
+}
+
+button:hover:not(:disabled) {
+  background-color: #d63c54;
+}
+
+button:disabled {
+  background-color: #555;
+  cursor: not-allowed;
+}
+
+.error-message,
+.response-area {
+  margin-top: 20px;
+  padding: 15px;
+  border-radius: 5px;
+}
+
+.error-message {
+  background-color: rgba(220, 53, 69, 0.2);
+  border: 1px solid var(--failed);
+  color: var(--failed);
+}
+
+.response-area {
+  background-color: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+}
+
+pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--text-primary);
+}
+
+/* --- Status Page --- */
+.refresh-btn {
+  margin-bottom: 20px;
+}
+
+.task-table-container {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+th {
+  background-color: var(--secondary-bg);
+}
+
+.result-preview {
+  max-height: 100px;
+  overflow-y: auto;
+  font-size: 0.85rem;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 5px;
+  border-radius: 4px;
+}
+
+.status-chip {
+  padding: 4px 10px;
+  border-radius: 12px;
+  color: white;
+  font-weight: bold;
+  font-size: 0.8rem;
+  text-transform: capitalize;
+}
+.status-chip.completed {
+  background-color: var(--success);
+}
+.status-chip.in_progress {
+  background-color: var(--in-progress);
+}
+.status-chip.pending {
+  background-color: var(--pending);
+}
+.status-chip.failed {
+  background-color: var(--failed);
+}
+
+/* src/App.css */
+
+/* ... (all your existing styles) ... */
+
+/* --- Result Page Styles --- */
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.result-actions .back-btn,
+.result-actions .download-btn {
+  margin: 0;
+  margin-left: 10px;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.back-btn {
+  background-color: var(--sidebar-bg);
+}
+
+.markdown-content {
+  margin-top: 20px;
+  background-color: var(--secondary-bg);
+  padding: 20px 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+/* Styles for rendered markdown */
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  color: var(--accent-color);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 5px;
+}
+
+.markdown-content a {
+  color: var(--accent-color);
+}
+
+.markdown-content code {
+  background-color: rgba(0, 0, 0, 0.3);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.markdown-content pre {
+  background-color: rgba(0, 0, 0, 0.3);
+  padding: 15px;
+  border-radius: 5px;
+  overflow-x: auto;
+}
+
+.markdown-content blockquote {
+  border-left: 4px solid var(--border-color);
+  padding-left: 15px;
+  color: var(--text-secondary);
+  margin-left: 0;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 15px 0;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--border-color);
+  padding: 8px 12px;
+}
+.markdown-content th {
+  background-color: var(--sidebar-bg);
+}
+
+/* --- Status Page Link Style --- */
+.view-link {
+  background-color: var(--sidebar-bg);
+  color: var(--text-primary);
+  padding: 6px 12px;
+  border-radius: 5px;
+  text-decoration: none;
+  font-weight: bold;
+  transition: background-color 0.2s;
+}
+
+.view-link:hover {
+  background-color: #1a4a8a;
+}

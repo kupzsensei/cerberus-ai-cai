@@ -1,0 +1,176 @@
+# PDF Processing API with Ollama
+
+This FastAPI application provides a robust API for processing PDF files using an Ollama model via its REST API. It supports both text-based and image-based (scanned) PDFs by using an OCR fallback mechanism.
+
+It allows users to upload PDFs for either immediate (synchronous) processing or long-running (asynchronous) background processing with persistent task tracking via a SQLite database.
+
+## Project Structure
+
+
+├── uploaded_pdfs/ # Directory where uploaded PDFs are stored for background tasks
+
+├── logs/ # Directory for log files
+
+├── tasks.db # SQLite database for tracking task status
+
+├── main.py # The main FastAPI application
+├── utils.py # Utility functions for PDF processing (including OCR) and Ollama API interaction
+├── database.py # Module for all SQLite database operations
+
+├── config.json # Configuration file
+
+├── requirements.txt # Python dependencies
+
+└── README.md # This file
+
+## Setup
+
+1.  **Prerequisite: Install Tesseract OCR Engine**
+
+    This application uses the Tesseract engine to read text from scanned/image-based PDFs. You **must** install it on your system before running the application.
+
+    - **On Debian/Ubuntu:**
+
+      ```bash
+      sudo apt update
+      sudo apt install tesseract-ocr
+      ```
+
+    - **On macOS (using Homebrew):**
+
+      ```bash
+      brew install tesseract
+      ```
+
+    - **On Windows:**
+      Download and run the installer from the official [Tesseract at UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki) page. Make sure to add the Tesseract installation directory to your system's `PATH` environment variable.
+
+2.  **Clone the repository:**
+
+    ```bash
+    git clone <your-repo-url>
+    cd <your-repo-name>
+    ```
+
+3.  **Create and activate a virtual environment (recommended):**
+
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+    ```
+
+4.  **Install Python dependencies:**
+    This will install FastAPI, PyMuPDF, pytesseract, and other required libraries.
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+5.  **Configure the application:**
+    Edit the `config.json` file to set the correct paths and your Ollama API URL. The application will create necessary directories and the `tasks.db` file on its first run.
+
+## Running the Application
+
+To run the FastAPI server, use uvicorn:
+
+```bash
+uvicorn main:app --reload
+```
+
+`The server will be available at http://127.0.0.1:8000`
+
+## API Endpoints
+
+1. **Process PDFs (Async Background Task)**
+   Uploads one or more PDFs for background processing. Ideal for large files or long-running jobs.
+
+- **URL**: `/process-pdfs/`
+- **Method**: `POST`
+- **Form Data**:
+  - user_prompt (string, required): The prompt to be used with the Ollama model.
+  - files (file, required): One or more PDF files to be processed.
+- **Response** (202 Accepted):
+
+```json
+{
+  "message": "PDF processing started in the background.",
+  "tasks": ["file1.pdf", "file2.pdf"]
+}
+```
+
+2. **Process a Single PDF (Sync)**
+   Uploads a single PDF, processes it immediately, and returns the result in the response.
+
+- **URL**: `/pdfprofessor`
+- **Method**: `POST`
+- **Form Data**:
+  - prompt (string, required): The prompt for the Ollama model.
+  - file (file, required): A single PDF file.
+- **Response** (200 OK):
+
+```json
+{
+  "processed_text": "This is the text from the PDF, processed by Ollama..."
+}
+```
+
+- Example `curl` :
+
+```bash
+curl -X POST "[http://127.0.0.1:8000/pdfprofessor](http://127.0.0.1:8000/pdfprofessor)" \
+  -F "prompt=Extract all names from this document" \
+  -F "file=@/path/to/your/document.pdf"
+```
+
+3. **Get Status for All Tasks**
+   Retrieves the status of all tasks submitted for background processing.
+
+- **URL**: `/status`
+- **Method**: `GET`
+- **Response:**: An array of task objects.
+
+```json
+[
+  {
+    "task_id": "document-A.pdf",
+    "status": "completed",
+    "result": { "processed_text": "..." },
+    "created_at": "2024-06-20T12:01:00.123Z",
+    "updated_at": "2024-06-20T12:05:30.456Z"
+  },
+  {
+    "task_id": "document-B.pdf",
+    "status": "pending",
+    "result": null,
+    "created_at": "2024-06-20T12:02:00.789Z",
+    "updated_at": "2024-06-20T12:02:00.789Z"
+  }
+]
+```
+
+4. **Get Status for a specific Task**
+
+- **URL**: `/status/{task_id}`
+- **Method**: `GET`
+- **Path Parameter**:
+  - `task_id (string, required): The filename used as the task ID.`
+- **Response**: A single task object.
+
+```json
+{
+  "task_id": "document-A.pdf",
+  "status": "completed",
+  "result": { "processed_text": "..." },
+  "created_at": "2024-06-20T12:01:00.123Z",
+  "updated_at": "2024-06-20T12:05:30.456Z"
+}
+```
+
+### Summary of Changes and Benefits
+
+- **Dual Capability:** Your application can now handle both PDFs with selectable text and scanned PDFs that are just images.
+- **Efficient Design:** It uses a "fallback" mechanism. It first tries the extremely fast direct text extraction. Only if that fails does it engage the slower, more CPU-intensive OCR process.
+- **Robustness:** This significantly increases the number of real-world PDFs your application can successfully process, making it far more useful.
+- **Clear Documentation:** The updated `README.md` now correctly informs users about the crucial Tesseract dependency, preventing setup failures.
+
+Your application is now significantly more powerful and versatile.
