@@ -5,24 +5,32 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # --- Install System Dependencies ---
-# Update package lists and install tesseract-ocr. This is crucial for OCR functionality.
 RUN apt-get update && apt-get install -y tesseract-ocr && \
-    # Clean up the apt cache to reduce image size
     rm -rf /var/lib/apt/lists/*
+
+# --- Create a non-root user to run the application ---
+# Create a new group named 'appgroup' and a new user named 'appuser'
+RUN groupadd -r appgroup && useradd --no-log-init -r -g appgroup appuser
 
 # Copy the dependencies file to the working directory
 COPY requirements.txt .
 
-# --- Install Python Dependencies ---
-# Install any needed packages specified in requirements.txt
+# Install Python Dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application's code into the container
-COPY . .
+# Copy the rest of the application's code
+# We change the ownership of the copied files to our new user
+COPY --chown=appuser:appgroup . .
 
-# Make port 8000 available to the world outside this container
+# --- Set Correct Permissions ---
+# Ensure the 'appuser' owns the entire /app directory, including where volumes will be mounted
+RUN chown -R appuser:appgroup /app
+
+# Switch to the non-root user
+USER appuser
+
+# Make port 8000 available
 EXPOSE 8000
 
-# --- Run the Application ---
-# Command to run the uvicorn server. 0.0.0.0 is essential to accept connections from outside the container.
+# Run the Application as 'appuser'
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
