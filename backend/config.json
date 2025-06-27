@@ -1,9 +1,10 @@
+
 {
   "pdf_directory": "uploaded_pdfs",
   "output_directory": "processed_output",
   "log_directory": "logs",
-  "database_file": "tasks.db",
-  "ollama_api_url": "http://10.254.10.25:11434/api/generate",
+  "database_file": "database/tasks.db",  "<-- CHANGED THIS LINE",
+  "ollama_api_url": "http://host.docker.internal:11434/api/generate",
   "ollama_model": "gemma3",
   "chunk_size": 4096
 }
