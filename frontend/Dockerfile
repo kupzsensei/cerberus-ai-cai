@@ -16,7 +16,7 @@ ENV VITE_API_URL=$VITE_API_URL
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install
+RUN npm install --force
 
 # Copy the rest of the frontend source code
 COPY . .
