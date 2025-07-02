@@ -4,24 +4,18 @@ import { getOllamaModelsAPI } from "../api";
 import { useEffect } from "react";
 import { NavLink } from "react-router-dom";
 
-
-
-export default function Sidebar({ setSelectedModel }) {
-    const { data: models, isSuccess } = useQuery({
+export default function Sidebar({ selectedModel, setSelectedModel }) {
+    const { data: models, isLoading: isLoadingModels, isError: isModelError, isSuccess } = useQuery({
         queryKey: ['models'],
         queryFn: getOllamaModelsAPI,
         staleTime: Infinity
-    })
-    // console.log(models, 'models')
+    });
 
     useEffect(() => {
-        if (isSuccess && models) {
-            setSelectedModel(models[0].name)
+        if (isSuccess && models && models.length > 0) {
+            setSelectedModel(models[0].name);
         }
-    }, [isSuccess, models])
-
-
-
+    }, [isSuccess, models, setSelectedModel]);
 
     return (
         <section className="flex flex-col gap-5 p-5 border-green-500 border-r min-w-[300px]">
@@ -78,12 +72,12 @@ export default function Sidebar({ setSelectedModel }) {
                 <p className="text-xs text-red-800  drop-shadow-red-600 drop-shadow-md">
                     current model
                 </p>
-                <select className="p-2 font-bold border-green-500 border" onChange={(e) => {
+                <select className="p-2 font-bold border-green-500 border" value={selectedModel} onChange={(e) => {
                     setSelectedModel(e.target.value)
-                }}>
-
+                }} disabled={isLoadingModels || isModelError}>
+                    {isLoadingModels && <option>Loading models...</option>}
+                    {isModelError && <option>Error loading models</option>}
                     {models?.map(item => (<option key={item.name} value={item.name}  >{item.name}</option>))}
-
                 </select>
             </div>
         </section>

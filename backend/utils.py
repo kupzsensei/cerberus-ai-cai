@@ -29,6 +29,14 @@ os.makedirs(OUTPUT_DIRECTORY, exist_ok=True)
 os.makedirs(LOG_DIRECTORY, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# If a Tesseract path is provided in the config, set it
+TESSERACT_PATH = config.get('tesseract_path')
+if TESSERACT_PATH:
+    pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
+    logging.info(f"Using Tesseract executable at: {TESSERACT_PATH}")
+else:
+    logging.warning("Tesseract path not configured in config.json. OCR will fail if Tesseract is not in the system's PATH.")
+
 # --- Core Logic ---
 async def process_with_ollama_api(client: httpx.AsyncClient, text_chunk: str, user_prompt: str, model_name: str) -> str:
     """Sends a text chunk to the Ollama API for processing using a specific model."""
@@ -41,6 +49,7 @@ async def process_with_ollama_api(client: httpx.AsyncClient, text_chunk: str, us
     }
     try:
         logging.info(f"Sending request to Ollama with model: {model_name}")
+        logging.info(f"Sending request to Ollama URL: {OLLAMA_API_URL}")
         response = await client.post(OLLAMA_API_URL, json=payload, timeout=180.0)
         response.raise_for_status()  # Raises an exception for 4xx or 5xx status codes
         api_response = response.json()
@@ -59,16 +68,7 @@ def perform_ocr_on_pdf_bytes(file_content: bytes) -> str:
     """
     Performs OCR on each page of a PDF and returns the combined text.
     """
-    # ==============================================================================
-    # == IMPORTANT: UPDATE THE PATH BELOW with the result of `which tesseract` or `where tesseract` ==
-    # ==============================================================================
-    # For Windows:
-    # pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-    # For Linux (example path):
-    # pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
-    # For macOS with Homebrew (example path):
-    # pytesseract.pytesseract.tesseract_cmd = r'/opt/homebrew/bin/tesseract'
-
+    # The Tesseract path is now configured globally at startup.
     text = ""
     logging.info("Performing OCR on PDF...")
     try:

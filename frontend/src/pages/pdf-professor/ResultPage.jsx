@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import jsPDF from "jspdf";
 import '../../PdfProfessor.css'
 import { getTaskById } from "../../api/apiService";
+import MarkdownRenderer from "../../components/MarkdownRenderer";
 
 
 const ResultPage = () => {
@@ -75,10 +76,6 @@ const ResultPage = () => {
   const processedText =
     task.result?.processed_text || "No result text found for this task.";
 
-  // --- THIS IS THE NEW LINE ---
-  // It removes any <think>...</think> blocks and trims whitespace.
-  const cleanedText = processedText.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-
   return (
     <div className="page-content p-5">
       <div
@@ -112,10 +109,7 @@ const ResultPage = () => {
         className="markdown-content-container p-1 text-green-500 text-lg mt-10"
         ref={resultRef}
       >
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {/* We now pass the cleanedText to ReactMarkdown */}
-          {cleanedText}
-        </ReactMarkdown>
+        <MarkdownRenderer content={processedText} />
       </div>
     </div>
   );

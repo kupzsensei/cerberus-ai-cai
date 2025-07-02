@@ -13,8 +13,7 @@ const UploadPage = () => {
     const [response, setResponse] = useState(null);
     const [error, setError] = useState("");
 
-    const outletContext = useOutletContext()
-    const ollamaModel = outletContext // <-- ADDED: State for model
+    const { selectedModel } = useOutletContext();
 
     // console.log('pdfprofessor context',outletContext )
 
@@ -46,7 +45,7 @@ const UploadPage = () => {
 
         try {
             // ALWAYS use the background processing endpoint for consistency and to avoid timeouts.
-            const result = await processMultipleFiles(prompt, files, ollamaModel); // <-- UPDATED
+            const result = await processMultipleFiles(prompt, files, selectedModel); // <-- UPDATED
 
             // The response is now just a confirmation message.
             // The actual result must be viewed on the Status page.

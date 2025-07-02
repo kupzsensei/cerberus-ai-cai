@@ -1,6 +1,6 @@
 import { createBrowserRouter } from "react-router-dom";
 import App from "./App";
-import Chatbot from "./pages/chat-bot";
+import Chatbot from "./pages/chat-bot/index.jsx"; // Corrected import path
 import UploadPage from "./pages/pdf-professor/analyze-pdf";
 import StatusPage from "./pages/pdf-professor/StatusPage";
 import ResultPage from "./pages/pdf-professor/ResultPage";

@@ -3,6 +3,7 @@ import os
 import httpx
 import logging
 from datetime import datetime
+import pytz
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Form, HTTPException
 from fastapi.responses import JSONResponse
 from typing import List
@@ -11,18 +12,18 @@ import database
 
 from fastapi.middleware.cors import CORSMiddleware
 
+ADELAIDE_TZ = pytz.timezone('Australia/Adelaide')
 app = FastAPI()
 
-origins = [
-    "*", # allow all origins
-]
+# Read CORS origins from config, with a fallback for safety
+origins = utils.config.get("cors_origins", [])
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"], # Allows all methods
-    allow_headers=["*"], # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Create a persistent client for making requests to Ollama
@@ -47,7 +48,7 @@ async def process_and_update_task(file_name: str, user_prompt: str, model_name: 
     file_path = os.path.join(utils.PDF_DIRECTORY, file_name)
     
     # Record the actual start time of processing
-    start_time = datetime.utcnow()
+    start_time = datetime.now(ADELAIDE_TZ)
     
     try:
         # Set status to 'in_progress', clearing any previous result
@@ -59,7 +60,7 @@ async def process_and_update_task(file_name: str, user_prompt: str, model_name: 
         processed_text = await utils.process_pdf_content(pdf_content, user_prompt, client, model_name)
         
         # Record end time and calculate duration
-        end_time = datetime.utcnow()
+        end_time = datetime.now(ADELAIDE_TZ)
         duration = (end_time - start_time).total_seconds()
         
         result_data = {"processed_text": processed_text}
@@ -68,7 +69,7 @@ async def process_and_update_task(file_name: str, user_prompt: str, model_name: 
 
     except Exception as e:
         # Also record duration even if it fails
-        end_time = datetime.utcnow()
+        end_time = datetime.now(ADELAIDE_TZ)
         duration = (end_time - start_time).total_seconds()
         
         logging.error(f"Background task failed for {file_name}. Error: {e}", exc_info=True)

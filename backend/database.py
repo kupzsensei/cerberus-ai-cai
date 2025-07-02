@@ -2,7 +2,9 @@
 import aiosqlite
 import json
 from datetime import datetime
+import pytz
 
+ADELAIDE_TZ = pytz.timezone('Australia/Adelaide')
 DATABASE_FILE = "" # This will be loaded from config
 
 def configure_database(db_file: str):
@@ -31,7 +33,7 @@ async def add_or_update_task(task_id: str, prompt: str, ollama_model: str):
     """
     Adds a new task, or resets an existing one, clearing the old processing time.
     """
-    now = datetime.utcnow()
+    now = datetime.now(ADELAIDE_TZ)
     async with aiosqlite.connect(DATABASE_FILE) as db:
         await db.execute(
             """
@@ -45,7 +47,7 @@ async def add_or_update_task(task_id: str, prompt: str, ollama_model: str):
 
 async def update_task(task_id: str, status: str, result: dict = None, processing_time: float = None):
     """Updates a task's status and result, and optionally the processing time."""
-    now = datetime.utcnow()
+    now = datetime.now(ADELAIDE_TZ)
     result_json = json.dumps(result) if result else None
     async with aiosqlite.connect(DATABASE_FILE) as db:
         if processing_time is not None:
