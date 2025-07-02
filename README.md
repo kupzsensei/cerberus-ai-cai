@@ -130,11 +130,11 @@ Follow these steps to get the Cerberus AI application up and running:
     docker-compose up -d --build frontend
     ```
 
-*   **`[Errno -2] Name or service not known` (Ollama Connectivity)**:
+*   **`[Errno -2] Name or service not known` or `All connection attempts failed` (Ollama Connectivity)**:
     This indicates the backend cannot reach your Ollama instance.
     **Solution**:
-    1.  Verify your Ollama instance is running and accessible at the IP address and port specified in `backend/config.json` (e.g., `http://10.254.10.25:11434`).
-    2.  Ensure the `ollama_api_url` in `backend/config.json` is correct.
+    1.  Verify your Ollama instance is running and accessible from your host machine at the configured `ollama_api_url` (e.g., `http://host.docker.internal:11434/api/generate`).
+    2.  Ensure the `ollama_api_url` in `backend/config.json` is correctly set for your environment (e.g., `host.docker.internal` for Docker Desktop, or a specific IP for Linux).
     3.  After modifying `backend/config.json`, you *must* rebuild and restart the `backend` service:
         ```bash
         docker-compose up -d --build backend
