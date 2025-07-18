@@ -48,7 +48,7 @@ Follow these steps to get the Cerberus AI application up and running:
     git clone https://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@github.com/kupzsensei/cerberus-ai-cai.git
     cd cerberus-ai-cai
     ```
-    (Replace `<your-repository-url>` with the actual URL of your Git repository.)
+    
 
 2.  **Configure Backend (Ollama API URL)**:
     The backend needs to know where your Ollama instance is running.
