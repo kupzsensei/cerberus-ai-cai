@@ -45,8 +45,8 @@ Follow these steps to get the Cerberus AI application up and running:
 
 1.  **Clone the Repository**:
     ```bash
-    git clone <your-repository-url>
-    cd cerberus-ai
+    git clone https://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@github.com/kupzsensei/cerberus-ai-cai.git
+    cd cerberus-ai-cai
     ```
     (Replace `<your-repository-url>` with the actual URL of your Git repository.)
 
