@@ -156,6 +156,14 @@ curl -X POST "[http://127.0.0.1:8000/pdfprofessor](http://127.0.0.1:8000/pdfprof
   - `task_id (string, required): The filename used as the task ID.`
 - **Response**: A single task object.
 
+5. **Cybersecurity Research**
+
+- **URL**: `/research`
+- **Method**: `POST`
+- **Form Data**:
+  - `query (string, required): The research query.`
+- **Response**: A JSON object containing the research results.
+
 ```json
 {
   "task_id": "document-A.pdf",

@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from typing import List
 import utils
 import database
+import research
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -34,6 +35,7 @@ async def startup_event():
     db_file = utils.config.get("database_file", "tasks.db")
     database.configure_database(db_file)
     await database.initialize_db()
+    await database.initialize_research_db()
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -178,3 +180,41 @@ async def delete_task_endpoint(task_id: str):
     await database.delete_task(task_id)
 
     return {"message": f"Task '{task_id}' and associated file were successfully deleted."}
+
+@app.post("/research")
+async def research_endpoint(query: str = Form(...)):
+    """
+    Performs a research query and returns the results.
+    """
+    if not query:
+        raise HTTPException(status_code=400, detail="A query is required.")
+    
+    result = await research.perform_search(query)
+    
+    return {"result": result}
+
+@app.get("/research")
+async def get_research_list():
+    """Retrieves the list of all research queries."""
+    research_list = await database.get_all_research()
+    return research_list
+
+@app.get("/research/{research_id}")
+async def get_research_by_id_endpoint(research_id: int):
+    """Retrieves a single research entry by ID."""
+    research_entry = await database.get_research_by_id(research_id)
+    if not research_entry:
+        raise HTTPException(status_code=404, detail="Research entry not found.")
+    return research_entry
+
+@app.delete("/research/{research_id}", status_code=200)
+async def delete_research_endpoint(research_id: int):
+    """
+    Deletes a research entry by ID.
+    """
+    research_entry = await database.get_research_by_id(research_id)
+    if not research_entry:
+        raise HTTPException(status_code=404, detail=f"Research entry with ID {research_id} not found.")
+    
+    await database.delete_research(research_id)
+    return {"message": f"Research entry with ID {research_id} successfully deleted."}
