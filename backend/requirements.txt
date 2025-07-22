@@ -72,3 +72,7 @@ watchdog==4.0.2
 watchfiles==1.1.0
 websockets==15.0.1
 pytz==2024.1
+langchain-ollama
+langchain-tavily
+langchain-core
+langgraph

@@ -9,6 +9,7 @@ Cerberus AI is a full-stack application designed to process PDF documents using 
 *   **Background Processing**: Handles large PDF processing tasks in the background to prevent timeouts.
 *   **Status Tracking**: Monitor the status of PDF processing tasks.
 *   **Chatbot Interface**: (Assumed, based on `chat-bot/index.jsx`) An interface for interacting with a language model.
+*   **Cybersecurity Research**: A dedicated page for performing cybersecurity threat and risk research.
 *   **Containerized Deployment**: Easy setup and deployment using Docker and Docker Compose.
 
 ## Technologies Used
@@ -44,10 +45,10 @@ Follow these steps to get the Cerberus AI application up and running:
 
 1.  **Clone the Repository**:
     ```bash
-    git clone <your-repository-url>
-    cd cerberus-ai
+    git clone https://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@github.com/kupzsensei/cerberus-ai-cai.git
+    cd cerberus-ai-cai
     ```
-    (Replace `<your-repository-url>` with the actual URL of your Git repository.)
+    
 
 2.  **Configure Backend (Ollama API URL)**:
     The backend needs to know where your Ollama instance is running.
@@ -91,11 +92,23 @@ Follow these steps to get the Cerberus AI application up and running:
     (Replace `localhost` with your server's IP address if accessing remotely.)
 
 2.  **Upload and Process PDFs**:
-    *   Go to the "PDF Professor" section (or similar, based on your frontend routing).
-    *   Drag and drop your PDF files into the designated area or click to select them.
+    *   Go to the "PDF Professor" section.
+    *   Drag and drop your PDF files or click to select them.
     *   Enter a prompt for the Ollama model (e.g., "Summarize this document," "Extract key findings," etc.).
-    *   Click "Process" to start the background processing.
-    *   Monitor the status on the "Status Page" (or similar).
+    *   Click "Process" to start background processing.
+    *   Monitor the status on the "Task Status" page.
+
+3.  **Perform Cybersecurity Research**:
+    *   Navigate to the "Cybersecurity Research" section.
+    *   Select a "Start Date" and "End Date" for your research query.
+    *   Click "Start Research" to generate a report based on the specified date range.
+    *   View the formatted results directly on the page.
+
+4.  **Manage Research History**:
+    *   Go to the "Research List" page.
+    *   View a list of all your past research queries.
+    *   Click "View" to see the full report for a specific query.
+    *   Click "Delete" to remove a research entry from the database.
 
 ## Configuration Details
 

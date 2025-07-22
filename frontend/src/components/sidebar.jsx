@@ -59,9 +59,21 @@ export default function Sidebar({ selectedModel, setSelectedModel }) {
                         Task Status
                     </NavLink>
                 </div>
-                <span className="text-green-800 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2">
-                    Coming Soon...
-                </span>
+                <div className="flex flex-col">
+                    <span className="text-green-800  text-xs  drop-shadow-green-600 drop-shadow-md border-green-500 ">
+                        Threats and Risks
+                    </span>
+                    <NavLink to={'/research'} end className={({ isActive }) => isActive ?
+                        "text-green-500 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 border  hover:border p-2"
+                        : "text-green-700 hover:text-green-500 font-bold   drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2"}>
+                        Cybersecurity Research
+                    </NavLink>
+                    <NavLink to={'/research/list'} className={({ isActive }) => isActive ?
+                        "text-green-500 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 border  hover:border p-2"
+                        : "text-green-700 hover:text-green-500 font-bold   drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2"}>
+                        Research List
+                    </NavLink>
+                </div>
                 <span className="text-green-800 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2">
                     Coming Soon...
                 </span>
