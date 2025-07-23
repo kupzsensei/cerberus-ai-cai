@@ -2,8 +2,10 @@ import React, { useState } from "react";
 import { research } from "../../api/apiService";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useOutletContext } from "react-router-dom";
 
 const ResearchPage = () => {
+    const { selectedOllamaServer } = useOutletContext();
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -23,7 +25,7 @@ const ResearchPage = () => {
 
         try {
             const query = `cybersecurity incidents in Australia from ${startDate} to ${endDate}`;
-            const result = await research(query);
+            const result = await research(query, selectedOllamaServer?.name, selectedOllamaServer?.model); // Pass selectedOllamaServer.name and model
             console.log("API Result:", result);
             setResponse(result);
         } catch (err) {
@@ -71,7 +73,7 @@ const ResearchPage = () => {
                 <button
                     type="submit"
                     className="mt-5"
-                    disabled={isLoading || !startDate || !endDate}
+                    disabled={isLoading || !startDate || !endDate || !selectedOllamaServer} // Use selectedOllamaServer
                 >
                     {isLoading ? "Researching..." : "Start Research"}
                 </button>
@@ -79,11 +81,11 @@ const ResearchPage = () => {
 
             {error && <div className="error-message">{error}</div>}
 
-            {response && (
+            {response && response.result && (
                 <div className="response-area">
                     <h3>Research Results</h3>
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {response.result.result}
+                        {response.result}
                     </ReactMarkdown>
                 </div>
             )}

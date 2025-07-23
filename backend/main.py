@@ -85,7 +85,7 @@ async def process_and_update_task(file_name: str, user_prompt: str, model_name: 
 async def process_pdfs_background(
     background_tasks: BackgroundTasks,
     user_prompt: str = Form(...),
-    ollama_model: str = Form(default=utils.OLLAMA_MODEL_DEFAULT),
+    ollama_model: str = Form(...),
     files: List[UploadFile] = File(...)
 ):
     """
@@ -122,7 +122,7 @@ async def process_pdfs_background(
 @app.post("/pdfprofessor")
 async def pdf_professor_direct(
     prompt: str = Form(...),
-    ollama_model: str = Form(default=utils.OLLAMA_MODEL_DEFAULT),
+    ollama_model: str = Form(...),
     file: UploadFile = File(...)
 ):
     """
@@ -183,16 +183,81 @@ async def delete_task_endpoint(task_id: str):
     return {"message": f"Task '{task_id}' and associated file were successfully deleted."}
 
 @app.post("/research")
-async def research_endpoint(query: str = Form(...)):
+async def research_endpoint(query: str = Form(...), ollama_server_name: str = Form(None)):
     """
     Performs a research query and returns the results.
     """
     if not query:
         raise HTTPException(status_code=400, detail="A query is required.")
     
-    result = await research.perform_search(query)
+    result, generation_time = await research.perform_search(query, ollama_server_name)
     
-    return {"result": result}
+    return {"result": result, "generation_time": generation_time}
+
+@app.get("/ollama-servers")
+async def get_ollama_servers_endpoint():
+    """Retrieves the list of configured Ollama servers."""
+    servers = await database.get_ollama_servers()
+    return {"servers": servers}
+
+@app.post("/ollama-servers", status_code=201)
+async def add_ollama_server_endpoint(name: str = Form(...), url: str = Form(...)):
+    """Adds a new Ollama server configuration."""
+    await database.add_ollama_server(name, url)
+    return {"message": f"Ollama server '{name}' added successfully."}
+
+@app.delete("/ollama-servers/{name}", status_code=200)
+async def delete_ollama_server_endpoint(name: str):
+    """Deletes an Ollama server configuration."""
+    server = await database.get_ollama_server_by_name(name)
+    if not server:
+        raise HTTPException(status_code=404, detail=f"Ollama server '{name}' not found.")
+    await database.delete_ollama_server(name)
+    return {"message": f"Ollama server '{name}' deleted successfully."}
+
+@app.get("/ollama-servers/{server_name}")
+async def get_ollama_server_by_name_endpoint(server_name: str):
+    """Retrieves a single Ollama server from the database by name."""
+    server = await database.get_ollama_server_by_name(server_name)
+    if not server:
+        raise HTTPException(status_code=404, detail="Ollama server not found.")
+    return server
+
+@app.get("/ollama-models")
+async def get_ollama_models_endpoint(url: str):
+    """Retrieves the list of models available from a given Ollama server URL."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{url.replace('/api/generate', '')}/api/tags", timeout=10.0)
+            response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
+            models_data = response.json()
+            return [model['name'] for model in models_data.get('models', [])]
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=500, detail=f"Could not connect to Ollama server: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching models from Ollama server: {e}")
+
+@app.get("/ollama-servers/{server_name}")
+async def get_ollama_server_by_name_endpoint(server_name: str):
+    """Retrieves a single Ollama server from the database by name."""
+    server = await database.get_ollama_server_by_name(server_name)
+    if not server:
+        raise HTTPException(status_code=404, detail="Ollama server not found.")
+    return server
+
+@app.get("/ollama-models")
+async def get_ollama_models_endpoint(url: str):
+    """Retrieves the list of models available from a given Ollama server URL."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{url.replace('/api/generate', '')}/api/tags", timeout=10.0)
+            response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
+            models_data = response.json()
+            return [model['name'] for model in models_data.get('models', [])]
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=500, detail=f"Could not connect to Ollama server: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching models from Ollama server: {e}")
 
 @app.get("/research")
 async def get_research_list():

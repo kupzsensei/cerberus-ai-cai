@@ -27,6 +27,12 @@ async def initialize_db():
                 processing_time_seconds REAL 
             )
         ''')
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS ollama_servers (
+                name TEXT PRIMARY KEY,
+                url TEXT NOT NULL
+            )
+        ''')
         await db.commit()
 
 async def add_or_update_task(task_id: str, prompt: str, ollama_model: str):
@@ -101,6 +107,42 @@ async def delete_task(task_id: str):
         await db.execute("DELETE FROM tasks WHERE task_id = ?", (task_id,))
         await db.commit()
 
+async def add_ollama_server(name: str, url: str):
+    """Adds a new Ollama server to the database."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute(
+            """
+            INSERT OR REPLACE INTO ollama_servers (name, url)
+            VALUES (?, ?)
+            """,
+            (name, url)
+        )
+        await db.commit()
+
+async def get_ollama_servers():
+    """Retrieves all configured Ollama servers from the database."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT name, url FROM ollama_servers ORDER BY name") as cursor:
+            servers = await cursor.fetchall()
+            return [dict(row) for row in servers]
+
+async def get_ollama_server_by_name(name: str):
+    """Retrieves a single Ollama server from the database by name."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT name, url FROM ollama_servers WHERE name = ?", (name,)) as cursor:
+            server = await cursor.fetchone()
+            if server:
+                return dict(server)
+            return None
+
+async def delete_ollama_server(name: str):
+    """Deletes an Ollama server from the database."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute("DELETE FROM ollama_servers WHERE name = ?", (name,))
+        await db.commit()
+
 async def initialize_research_db():
     """Initializes the database and creates the research table if it doesn't exist."""
     async with aiosqlite.connect(DATABASE_FILE) as db:
@@ -109,21 +151,23 @@ async def initialize_research_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 query TEXT NOT NULL,
                 result TEXT NOT NULL,
-                created_at TIMESTAMP NOT NULL
+                created_at TIMESTAMP NOT NULL,
+                generation_time REAL,
+                ollama_server_name TEXT
             )
         ''')
         await db.commit()
 
-async def add_research(query: str, result: str):
+async def add_research(query: str, result: str, generation_time: float, ollama_server_name: str):
     """Adds a new research entry to the database."""
     now = datetime.utcnow()
     async with aiosqlite.connect(DATABASE_FILE) as db:
         await db.execute(
             """
-            INSERT INTO research (query, result, created_at)
-            VALUES (?, ?, ?)
+            INSERT INTO research (query, result, created_at, generation_time, ollama_server_name)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (query, result, now)
+            (query, result, now, generation_time, ollama_server_name)
         )
         await db.commit()
 
@@ -131,7 +175,7 @@ async def get_all_research():
     """Retrieve all research entries from the database."""
     async with aiosqlite.connect(DATABASE_FILE) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM research ORDER BY created_at DESC") as cursor:
+        async with db.execute("SELECT id, query, created_at, generation_time, ollama_server_name FROM research ORDER BY created_at DESC") as cursor:
             research_list = await cursor.fetchall()
             return [dict(row) for row in research_list]
 

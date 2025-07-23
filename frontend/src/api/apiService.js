@@ -46,12 +46,39 @@ export const deleteTaskById = async (taskId) => {
   return response.data;
 };
 
-export const research = async (query) => {
+export const research = async (query, ollamaServerName, ollamaModel) => {
   const formData = new FormData();
   formData.append("query", query);
+  if (ollamaServerName) {
+    formData.append("ollama_server_name", ollamaServerName);
+  }
+  if (ollamaModel) {
+    formData.append("ollama_model", ollamaModel);
+  }
   const response = await axios.post(`${API_BASE_URL}/research`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
+  return response.data;
+};
+
+export const getOllamaServers = async () => {
+  const response = await axios.get(`${API_BASE_URL}/ollama-servers`);
+  return response.data.servers;
+};
+
+export const addOllamaServer = async (name, url, model) => {
+  const formData = new FormData();
+  formData.append("name", name);
+  formData.append("url", url);
+  formData.append("model", model);
+  const response = await axios.post(`${API_BASE_URL}/ollama-servers`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+export const deleteOllamaServer = async (name) => {
+  const response = await axios.delete(`${API_BASE_URL}/ollama-servers/${name}`);
   return response.data;
 };
 
@@ -67,5 +94,10 @@ export const getResearchById = async (researchId) => {
 
 export const deleteResearchById = async (researchId) => {
   const response = await axios.delete(`${API_BASE_URL}/research/${researchId}`);
+  return response.data;
+};
+
+export const getOllamaModels = async (url) => {
+  const response = await axios.get(`${API_BASE_URL}/ollama-models?url=${encodeURIComponent(url)}`);
   return response.data;
 };

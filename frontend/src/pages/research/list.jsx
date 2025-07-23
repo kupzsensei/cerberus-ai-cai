@@ -56,6 +56,8 @@ const ResearchListPage = () => {
                             <th>ID</th>
                             <th>Query</th>
                             <th>Created At</th>
+                            <th>Generation Time</th>
+                            <th>Ollama Server</th>
                             <th style={{textAlign:'center'}}>Action</th>
                         </tr>
                     </thead>
@@ -66,6 +68,8 @@ const ResearchListPage = () => {
                                     <td>{research.id}</td>
                                     <td className="prompt-cell">{research.query}</td>
                                     <td>{new Date(research.created_at).toLocaleString()}</td>
+                                    <td>{research.generation_time ? `${research.generation_time.toFixed(2)} seconds` : 'N/A'}</td>
+                                    <td>{research.ollama_server_name || 'N/A'}</td>
                                     <td className="action-cell flex gap-3 " style={{padding: '2rem'}}>
                                         <Link
                                             to={`/research/${research.id}`}
@@ -84,7 +88,7 @@ const ResearchListPage = () => {
                             ))
                         ) : (
                             <tr>
-                                <td colSpan="4">
+                                <td colSpan="6">
                                     No research found.
                                 </td>
                             </tr>

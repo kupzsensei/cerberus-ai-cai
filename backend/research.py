@@ -29,21 +29,23 @@ if not openrouter_api_key:
     raise ValueError("OPENROUTER_API_KEY is not set in the .env file")
 
 # Initialize the LLM (optional, for fallback)
-try:
-    ollama_api_url = utils.config.get("ollama_api_url")
-    ollama_model = utils.config.get("ollama_model")
+# Initialize the LLM (optional, for fallback)
+# This is now initialized within perform_search based on selected server
+# try:
+#     ollama_api_url = utils.config.get("ollama_api_url").replace("localhost", "host.docker.internal")
+#     ollama_model = utils.config.get("ollama_model")
 
-    llm = ChatOllama(
-        model=ollama_model,
-        temperature=0,
-        api_key=openrouter_api_key,
-        base_url=ollama_api_url.replace("/api/generate", "/") # Adjust base_url for ChatOllama
-    )
-    response = requests.get(f"{ollama_api_url.replace('/api/generate', '')}/api/tags")
-    if response.status_code != 200:
-        raise ConnectionError("Failed to connect to Ollama server")
-except Exception as e:
-    raise ConnectionError(f"Ollama server error: {str(e)}")
+#     llm = ChatOllama(
+#         model=ollama_model,
+#         temperature=0,
+#         api_key=openrouter_api_key,
+#         base_url=ollama_api_url.replace("/api/generate", "/") # Adjust base_url for ChatOllama
+#     )
+#     response = requests.get(f"{ollama_api_url.replace('/api/generate', '')}/api/tags")
+#     if response.status_code != 200:
+#         raise ConnectionError("Failed to connect to Ollama server")
+# except Exception as e:
+#     raise ConnectionError(f"Ollama server error: {str(e)}")
 
 # Corrected domain list
 include_domains = [
@@ -95,11 +97,46 @@ User query is provided in the messages.'''.format(domains=", ".join(include_doma
 ])
 
 # Create the agent (optional, for fallback)
-agent = create_react_agent(llm, [tavily_tool])
+# Create the agent (optional, for fallback)
+# agent = create_react_agent(llm, [tavily_tool])
 
 # Function to perform a search
-async def perform_search(query):
+async def perform_search(query, ollama_server_name: str = None, ollama_model: str = None):
     try:
+        # Start timer for the entire research process
+        overall_start_time = time.time()
+
+        # Determine which Ollama server to use
+        selected_server = None
+        if ollama_server_name:
+            selected_server = await database.get_ollama_server_by_name(ollama_server_name)
+        
+        if not selected_server:
+            # Fallback to default if not found or not provided
+            # For now, we'll just use the first one in the config if none is selected or found
+            # In a real app, you'd want a more robust default selection or error handling
+            all_servers = await database.get_ollama_servers()
+            if all_servers:
+                selected_server = all_servers[0]
+            else:
+                raise ValueError("No Ollama servers configured.")
+        
+        ollama_api_url = selected_server['url']
+
+        # Initialize the LLM with the selected server details
+        llm = ChatOllama(
+            model=ollama_model,
+            temperature=0,
+            api_key=openrouter_api_key,
+            base_url=ollama_api_url.replace("/api/generate", "/")
+        )
+        # Create the agent
+        agent = create_react_agent(llm, [tavily_tool])
+        # Test connection to the selected Ollama server
+        response = requests.get(f"{ollama_api_url.replace('/api/generate', '')}/api/tags")
+        if response.status_code != 200:
+            raise ConnectionError(f"Failed to connect to Ollama server at {ollama_api_url}")
+
         # Preprocess query with unique timestamp to avoid caching
         if "Australia" not in query:
             query = f"{query} Australia cybersecurity incidents timestamp:{int(time.time())}"
@@ -107,12 +144,7 @@ async def perform_search(query):
         logger.info(f"Processing query: {query}")
         
         # Get raw Tavily results
-        start_time = time.time()
         raw_results = tavily_tool.invoke(query)
-        response_time = time.time() - start_time
-        logger.info(f"Tavily response time: {response_time} seconds")
-        if response_time < 2:
-            logger.warning("Fast response time may indicate cached data")
         logger.info(f"Raw Tavily results: {json.dumps(raw_results, indent=2)}")
         
         # Filter results to ensure domain compliance and relevance
@@ -139,13 +171,16 @@ async def perform_search(query):
         
         if not output.strip():
             logger.warning("No relevant results found")
-            return "No cybersecurity incidents relevant to Australian businesses found for the requested timeframe."
+            return "No cybersecurity incidents relevant to Australian businesses found for the requested timeframe.", None
         
-        await database.add_research(query, output)
-        return output
+        overall_end_time = time.time()
+        generation_time = overall_end_time - overall_start_time
+
+        await database.add_research(query, output, generation_time, selected_server['name'])
+        return output, generation_time
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}")
-        return f"Error processing query: {str(e)}"
+        return f"Error processing query: {str(e)}", None
 
 # Function to format raw results
 def format_raw_results(results, start_count):

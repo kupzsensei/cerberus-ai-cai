@@ -19,9 +19,7 @@ config = load_config()
 PDF_DIRECTORY = config['pdf_directory']
 OUTPUT_DIRECTORY = config['output_directory']
 LOG_DIRECTORY = config['log_directory']
-OLLAMA_API_URL = config['ollama_api_url']
-# The model in config.json now acts as a default
-OLLAMA_MODEL_DEFAULT = config.get('ollama_model', 'gemma3') 
+#  
 CHUNK_SIZE = config['chunk_size']
 
 os.makedirs(PDF_DIRECTORY, exist_ok=True)
@@ -38,7 +36,7 @@ else:
     logging.warning("Tesseract path not configured in config.json. OCR will fail if Tesseract is not in the system's PATH.")
 
 # --- Core Logic ---
-async def process_with_ollama_api(client: httpx.AsyncClient, text_chunk: str, user_prompt: str, model_name: str) -> str:
+async def process_with_ollama_api(client: httpx.AsyncClient, text_chunk: str, user_prompt: str, model_name: str, ollama_api_url: str) -> str:
     """Sends a text chunk to the Ollama API for processing using a specific model."""
     combined_prompt = f"{user_prompt}\n\n---\n\n{text_chunk}"
     # The 'model' in the payload is now dynamic
@@ -133,7 +131,8 @@ async def process_pdf_content(
     file_content: bytes, 
     user_prompt: str, 
     client: httpx.AsyncClient,
-    model_name: str  # Pass the model name to be used
+    model_name: str,  # Pass the model name to be used
+    ollama_api_url: str # Pass the Ollama API URL to be used
 ) -> str:
     """
     Processes the content of a PDF file asynchronously using the Ollama API.
@@ -149,8 +148,8 @@ async def process_pdf_content(
     processed_content_parts = []
     
     for chunk in chunks:
-        # Pass the model_name down to the API call function
-        processed_chunk = await process_with_ollama_api(client, chunk, user_prompt, model_name)
-        processed_content_parts.append(processed_chunk)
+            # Pass the model_name and ollama_api_url down to the API call function
+            processed_chunk = await process_with_ollama_api(client, chunk, user_prompt, model_name, ollama_api_url)
+            processed_content_parts.append(processed_chunk)
     
     return "".join(processed_content_parts)
