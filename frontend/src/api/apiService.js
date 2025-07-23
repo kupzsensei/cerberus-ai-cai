@@ -18,10 +18,11 @@ export const processSingleFile = async (prompt, file, ollamaModel) => {
   return response.data;
 };
 
-export const processMultipleFiles = async (prompt, files, ollamaModel) => {
+export const processMultipleFiles = async (prompt, files, ollamaModel, ollamaServerName) => {
   const formData = new FormData();
   formData.append("user_prompt", prompt);
   formData.append("ollama_model", ollamaModel);
+  formData.append("ollama_server_name", ollamaServerName); // Add server name
   files.forEach((file) => {
     formData.append("files", file);
   });

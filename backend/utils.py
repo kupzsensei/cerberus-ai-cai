@@ -47,8 +47,10 @@ async def process_with_ollama_api(client: httpx.AsyncClient, text_chunk: str, us
     }
     try:
         logging.info(f"Sending request to Ollama with model: {model_name}")
-        logging.info(f"Sending request to Ollama URL: {OLLAMA_API_URL}")
-        response = await client.post(OLLAMA_API_URL, json=payload, timeout=180.0)
+        # Ensure the URL ends with /api/generate
+        full_url = f"{ollama_api_url.rstrip('/')}/api/generate"
+        logging.info(f"Sending request to Ollama URL: {full_url}")
+        response = await client.post(full_url, json=payload, timeout=180.0)
         response.raise_for_status()  # Raises an exception for 4xx or 5xx status codes
         api_response = response.json()
         return api_response.get('response', '')

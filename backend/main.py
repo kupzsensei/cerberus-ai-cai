@@ -43,7 +43,7 @@ async def shutdown_event():
     """On shutdown, close the httpx client."""
     await client.aclose()
 
-async def process_and_update_task(file_name: str, user_prompt: str, model_name: str):
+async def process_and_update_task(file_name: str, user_prompt: str, model_name: str, ollama_server_name: str):
     """
     The actual background task logic, now with processing time recording.
     """
@@ -58,8 +58,13 @@ async def process_and_update_task(file_name: str, user_prompt: str, model_name: 
         
         with open(file_path, "rb") as f:
             pdf_content = f.read()
+
+        # Fetch the server URL from the database
+        server = await database.get_ollama_server_by_name(ollama_server_name)
+        if not server:
+            raise Exception(f"Ollama server '{ollama_server_name}' not found.")
         
-        processed_text = await utils.process_pdf_content(pdf_content, user_prompt, client, model_name)
+        processed_text = await utils.process_pdf_content(pdf_content, user_prompt, client, model_name, server['url'])
         
         # Record end time and calculate duration
         end_time = datetime.now(ADELAIDE_TZ)
@@ -86,10 +91,11 @@ async def process_pdfs_background(
     background_tasks: BackgroundTasks,
     user_prompt: str = Form(...),
     ollama_model: str = Form(...),
+    ollama_server_name: str = Form(...),  # Added to receive the server name
     files: List[UploadFile] = File(...)
 ):
     """
-    Uploads multiple PDFs and processes them in the background using a specified model.
+    Uploads multiple PDFs and processes them in the background using a specified model and server.
     """
     if not user_prompt:
         raise HTTPException(status_code=400, detail="A user_prompt is required.")
@@ -111,7 +117,8 @@ async def process_pdfs_background(
 
         task_ids.append(file.filename)
         await database.add_or_update_task(file.filename, user_prompt, ollama_model) 
-        background_tasks.add_task(process_and_update_task, file.filename, user_prompt, ollama_model)
+        # Pass the server name to the background task
+        background_tasks.add_task(process_and_update_task, file.filename, user_prompt, ollama_model, ollama_server_name)
 
     if not task_ids:
         raise HTTPException(status_code=400, detail="No valid PDF files were processed.")
@@ -123,6 +130,7 @@ async def process_pdfs_background(
 async def pdf_professor_direct(
     prompt: str = Form(...),
     ollama_model: str = Form(...),
+    ollama_server_name: str = Form(...),
     file: UploadFile = File(...)
 ):
     """
@@ -133,7 +141,11 @@ async def pdf_professor_direct(
 
     pdf_content = await file.read()
     
-    processed_text = await utils.process_pdf_content(pdf_content, prompt, client, ollama_model)
+    server = await database.get_ollama_server_by_name(ollama_server_name)
+    if not server:
+        raise HTTPException(status_code=404, detail=f"Ollama server '{ollama_server_name}' not found.")
+
+    processed_text = await utils.process_pdf_content(pdf_content, prompt, client, ollama_model, server['url'])
     
     if "[Error:" in processed_text:
          raise HTTPException(status_code=500, detail=f"Failed to process PDF. Reason: {processed_text}")
