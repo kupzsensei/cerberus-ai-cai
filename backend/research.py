@@ -3,13 +3,11 @@ import logging
 from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
 from langchain_tavily import TavilySearch
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 import requests
 import json
 import re
 import time
 from datetime import datetime
-from langgraph.prebuilt import create_react_agent
 import database
 import utils
 
@@ -27,25 +25,6 @@ if not tavily_api_key:
     raise ValueError("TAVILY_API_KEY is not set in the .env file")
 if not openrouter_api_key:
     raise ValueError("OPENROUTER_API_KEY is not set in the .env file")
-
-# Initialize the LLM (optional, for fallback)
-# Initialize the LLM (optional, for fallback)
-# This is now initialized within perform_search based on selected server
-# try:
-#     ollama_api_url = utils.config.get("ollama_api_url").replace("localhost", "host.docker.internal")
-#     ollama_model = utils.config.get("ollama_model")
-
-#     llm = ChatOllama(
-#         model=ollama_model,
-#         temperature=0,
-#         api_key=openrouter_api_key,
-#         base_url=ollama_api_url.replace("/api/generate", "/") # Adjust base_url for ChatOllama
-#     )
-#     response = requests.get(f"{ollama_api_url.replace('/api/generate', '')}/api/tags")
-#     if response.status_code != 200:
-#         raise ConnectionError("Failed to connect to Ollama server")
-# except Exception as e:
-#     raise ConnectionError(f"Ollama server error: {str(e)}")
 
 # Corrected domain list
 include_domains = [
@@ -66,42 +45,8 @@ tavily_tool = TavilySearch(
     include_domains=include_domains
 )
 
-# Define the custom prompt template (optional, for fallback)
-prompt = ChatPromptTemplate.from_messages([
-    ("system", '''You are a research assistant tasked with generating a cybersecurity threat and risk report for incidents relevant to Australian businesses, based solely on Tavily search results from the following domains: {domains}. Include incidents such as exploits, data breaches, cyberattacks, and vulnerabilities, whether they occurred in Australia or globally, as long as they have clear relevance to Australian businesses (e.g., impacting Australian companies, supply chains, or industries). Do not invent, modify, or assume information not explicitly present in the search results. Provide 10–15 results if available, using all relevant raw results from Tavily. If fewer, state: "Only [X] relevant cybersecurity incidents found for the requested timeframe." Each item MUST follow this format:
-
-## [Number]. [Headline]
-
-[Description]
-
-- **Date of Incident**: [Date or "Not specified" if unavailable]
-- **Targets**: [Targets or "Not specified" if unavailable]
-- **Method**: [Method, e.g., exploit, phishing, ransomware, etc.]
-- **Relevance to Australian Business**: [Explain relevance, e.g., impact on Australian companies, customers, or industries]
-- **Source**: [Exact URL from Tavily results, matching one of the specified domains]
-
-Follow these steps:
-1. Use the Tavily Search tool to retrieve results for cybersecurity incidents (exploits, data breaches, cyberattacks, vulnerabilities) relevant to Australian businesses, strictly within the requested timeframe (e.g., June 1, 2025 to July 1, 2025).
-2. Only include results from the specified domains: {domains}. Discard any results from other domains.
-3. Use the exact URLs and content from the raw Tavily results; do not modify or fabricate data.
-4. Summarize all relevant results concisely and accurately in the specified format, prioritizing incidents within the query's timeframe.
-5. If no relevant data is found, state: "No cybersecurity incidents relevant to Australian businesses found for the requested timeframe."
-6. For future timeframes (e.g., 2025), include predictive trends or vulnerabilities from the raw results and note if data is speculative with: "Speculative based on current trends."
-7. Ensure all relevant raw results (up to 15) are included unless they fail relevance or domain criteria.
-
-Available tools:
-- tavily_search_results_json: Returns up to 15 web search results as JSON from the specified domains.
-
-User query is provided in the messages.'''.format(domains=", ".join(include_domains))),
-    MessagesPlaceholder(variable_name="messages")
-])
-
-# Create the agent (optional, for fallback)
-# Create the agent (optional, for fallback)
-# agent = create_react_agent(llm, [tavily_tool])
-
 # Function to perform a search
-async def perform_search(query, ollama_server_name: str = None, ollama_model: str = None):
+async def perform_search(query, ollama_server_name: str = None, ollama_model: str = "granite3.3"):
     try:
         # Start timer for the entire research process
         overall_start_time = time.time()
@@ -113,8 +58,6 @@ async def perform_search(query, ollama_server_name: str = None, ollama_model: st
         
         if not selected_server:
             # Fallback to default if not found or not provided
-            # For now, we'll just use the first one in the config if none is selected or found
-            # In a real app, you'd want a more robust default selection or error handling
             all_servers = await database.get_ollama_servers()
             if all_servers:
                 selected_server = all_servers[0]
@@ -130,8 +73,7 @@ async def perform_search(query, ollama_server_name: str = None, ollama_model: st
             api_key=openrouter_api_key,
             base_url=ollama_api_url.replace("/api/generate", "/")
         )
-        # Create the agent
-        agent = create_react_agent(llm, [tavily_tool])
+
         # Test connection to the selected Ollama server
         response = requests.get(f"{ollama_api_url.replace('/api/generate', '')}/api/tags")
         if response.status_code != 200:
@@ -167,7 +109,7 @@ async def perform_search(query, ollama_server_name: str = None, ollama_model: st
         logger.info(f"Filtered results count: {len(filtered_results)}")
         
         # Generate output from raw results
-        output = format_raw_results(filtered_results, 0)
+        output = format_raw_results(filtered_results, 0, llm)
         
         if not output.strip():
             logger.warning("No relevant results found")
@@ -183,7 +125,7 @@ async def perform_search(query, ollama_server_name: str = None, ollama_model: st
         return f"Error processing query: {str(e)}", None
 
 # Function to format raw results
-def format_raw_results(results, start_count):
+def format_raw_results(results, start_count, llm):
     output = ""
     for i, result in enumerate(results[:15], start_count + 1):
         title = result.get("title", "Untitled Incident")
@@ -256,14 +198,3 @@ def format_raw_results(results, start_count):
     if len(results) < 10:
         output += f"\nOnly [{len(results)}] relevant cybersecurity incidents found for the requested timeframe."
     return output
-
-# Example usage
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) > 1:
-        user_query = " ".join(sys.argv[1:])
-    else:
-        user_query = "june 1 to july 1, 2025"
-    result = perform_search(user_query)
-    print("\nSearch Results:")
-    print(result)

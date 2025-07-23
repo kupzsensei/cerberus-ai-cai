@@ -1,16 +1,9 @@
 {
-  "pdf_directory": "uploaded_pdfs",
-  "output_directory": "processed_output",
-  "log_directory": "logs",
-  "database_file": "database/tasks.db",
-  "ollama_servers": [
-    {
-      "name": "Default Ollama",
-      "url": "http://host.docker.internal:11434/api/generate",
-      "model": "gemma3"
-    }
-  ],
-  "chunk_size": 4096,
-  "tesseract_path": null,
-  "cors_origins": ["*"]
+    "ollama_api_url": "http://localhost:11434/api/generate",
+    "ollama_model": "gemma:7b",
+    "pdf_directory": "uploaded_pdfs",
+    "output_directory": "output",
+    "log_directory": "logs",
+    "chunk_size": 2000,
+    "tesseract_path": null
 }
