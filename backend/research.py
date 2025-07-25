@@ -118,10 +118,14 @@ async def perform_search(query, ollama_server_name: str = None, ollama_model: st
         overall_end_time = time.time()
         generation_time = overall_end_time - overall_start_time
 
-        await database.add_research(query, output, generation_time, selected_server['name'])
+        await database.add_research(query, output, generation_time, selected_server['name'], ollama_model)
         return output, generation_time
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}")
+        # Check for model-specific errors
+        if "is not supported" in str(e) or "Invalid model" in str(e):
+            error_message = f"The selected model '{ollama_model}' is not suitable for this research task. Please try a different model, such as 'granite3.3'."
+            return error_message, None
         return f"Error processing query: {str(e)}", None
 
 # Function to format raw results

@@ -116,7 +116,7 @@ async def process_pdfs_background(
             continue
 
         task_ids.append(file.filename)
-        await database.add_or_update_task(file.filename, user_prompt, ollama_model) 
+        await database.add_or_update_task(file.filename, user_prompt, ollama_model, ollama_server_name)
         # Pass the server name to the background task
         background_tasks.add_task(process_and_update_task, file.filename, user_prompt, ollama_model, ollama_server_name)
 
@@ -195,14 +195,14 @@ async def delete_task_endpoint(task_id: str):
     return {"message": f"Task '{task_id}' and associated file were successfully deleted."}
 
 @app.post("/research")
-async def research_endpoint(query: str = Form(...), ollama_server_name: str = Form(None)):
+async def research_endpoint(query: str = Form(...), ollama_server_name: str = Form(None), ollama_model: str = Form('granite3.3')):
     """
     Performs a research query and returns the results.
     """
     if not query:
         raise HTTPException(status_code=400, detail="A query is required.")
     
-    result, generation_time = await research.perform_search(query, ollama_server_name)
+    result, generation_time = await research.perform_search(query, ollama_server_name, ollama_model)
     
     return {"result": result, "generation_time": generation_time}
 

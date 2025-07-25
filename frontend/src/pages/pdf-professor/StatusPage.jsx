@@ -79,7 +79,7 @@ const StatusPage = () => {
                 <tr key={task.task_id}>
                   <td>{task.task_id}</td>
                   <td>{getStatusChip(task.status)}</td>
-                  <td>{task.ollama_model || 'N/A'}</td>
+                  <td>{task.ollama_server_name ? `${task.ollama_server_name} (${task.ollama_model || 'N/A'})` : (task.ollama_model || 'N/A')}</td>
                   <td>{task.processing_time_seconds +" sec" ?? 'N/A'}</td>
                   <td className="prompt-cell">{task.prompt}</td>
                   <td>{new Date(task.updated_at).toLocaleString()}</td>

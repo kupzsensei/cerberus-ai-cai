@@ -21,10 +21,11 @@ async def initialize_db():
                 status TEXT NOT NULL,
                 prompt TEXT,
                 ollama_model TEXT,
+                ollama_server_name TEXT,
                 result TEXT,
                 created_at TIMESTAMP NOT NULL,
                 updated_at TIMESTAMP NOT NULL,
-                processing_time_seconds REAL 
+                processing_time_seconds REAL
             )
         ''')
         await db.execute('''
@@ -35,7 +36,7 @@ async def initialize_db():
         ''')
         await db.commit()
 
-async def add_or_update_task(task_id: str, prompt: str, ollama_model: str):
+async def add_or_update_task(task_id: str, prompt: str, ollama_model: str, ollama_server_name: str):
     """
     Adds a new task, or resets an existing one, clearing the old processing time.
     """
@@ -44,10 +45,10 @@ async def add_or_update_task(task_id: str, prompt: str, ollama_model: str):
         await db.execute(
             """
             INSERT OR REPLACE INTO tasks 
-            (task_id, status, prompt, ollama_model, result, created_at, updated_at, processing_time_seconds) 
-            VALUES (?, 'pending', ?, ?, NULL, ?, ?, NULL)
+            (task_id, status, prompt, ollama_model, ollama_server_name, result, created_at, updated_at, processing_time_seconds) 
+            VALUES (?, 'pending', ?, ?, ?, NULL, ?, ?, NULL)
             """,
-            (task_id, prompt, ollama_model, now, now)
+            (task_id, prompt, ollama_model, ollama_server_name, now, now)
         )
         await db.commit()
 
@@ -153,21 +154,22 @@ async def initialize_research_db():
                 result TEXT NOT NULL,
                 created_at TIMESTAMP NOT NULL,
                 generation_time REAL,
-                ollama_server_name TEXT
+                ollama_server_name TEXT,
+                ollama_model TEXT
             )
         ''')
         await db.commit()
 
-async def add_research(query: str, result: str, generation_time: float, ollama_server_name: str):
+async def add_research(query: str, result: str, generation_time: float, ollama_server_name: str, ollama_model: str):
     """Adds a new research entry to the database."""
     now = datetime.utcnow()
     async with aiosqlite.connect(DATABASE_FILE) as db:
         await db.execute(
             """
-            INSERT INTO research (query, result, created_at, generation_time, ollama_server_name)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO research (query, result, created_at, generation_time, ollama_server_name, ollama_model)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (query, result, now, generation_time, ollama_server_name)
+            (query, result, now, generation_time, ollama_server_name, ollama_model)
         )
         await db.commit()
 
@@ -175,7 +177,7 @@ async def get_all_research():
     """Retrieve all research entries from the database."""
     async with aiosqlite.connect(DATABASE_FILE) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT id, query, created_at, generation_time, ollama_server_name FROM research ORDER BY created_at DESC") as cursor:
+        async with db.execute("SELECT id, query, created_at, generation_time, ollama_server_name, ollama_model FROM research ORDER BY created_at DESC") as cursor:
             research_list = await cursor.fetchall()
             return [dict(row) for row in research_list]
 

@@ -44,8 +44,14 @@ const UploadPage = () => {
         setError("");
 
         try {
+            // Create new File objects with timestamped names to prevent overwrites
+            const timestampedFiles = files.map(file => {
+                const newName = `${Date.now()}-${file.name}`;
+                return new File([file], newName, { type: file.type });
+            });
+
             // ALWAYS use the background processing endpoint for consistency and to avoid timeouts.
-            const result = await processMultipleFiles(prompt, files, selectedModel, selectedOllamaServer.name); // <-- UPDATED
+            const result = await processMultipleFiles(prompt, timestampedFiles, selectedModel, selectedOllamaServer.name);
 
             // The response is now just a confirmation message.
             // The actual result must be viewed on the Status page.

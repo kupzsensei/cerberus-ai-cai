@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { useOutletContext } from "react-router-dom";
 
 const ResearchPage = () => {
-    const { selectedOllamaServer } = useOutletContext();
+    const { selectedOllamaServer, selectedModel, handleModelChange } = useOutletContext();
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -25,7 +25,7 @@ const ResearchPage = () => {
 
         try {
             const query = `cybersecurity incidents in Australia from ${startDate} to ${endDate}`;
-            const result = await research(query, selectedOllamaServer?.name, selectedOllamaServer?.model); // Pass selectedOllamaServer.name and model
+            const result = await research(query, selectedOllamaServer?.name, selectedModel); // Pass selectedOllamaServer.name and model
             console.log("API Result:", result);
             setResponse(result);
         } catch (err) {
