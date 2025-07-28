@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useOutletContext } from "react-router-dom";
 
-const ResearchPage = () => {
+const ThreatsAndRisksPage = () => {
     const { selectedOllamaServer, selectedModel, handleModelChange } = useOutletContext();
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
@@ -25,7 +25,7 @@ const ResearchPage = () => {
 
         try {
             const query = `cybersecurity incidents in Australia from ${startDate} to ${endDate}`;
-            const result = await researchByDate(query, selectedOllamaServer?.name, selectedModel); // Pass selectedOllamaServer.name and model
+            const result = await researchByDate(query, selectedOllamaServer?.name, selectedModel);
             console.log("API Result:", result);
             setResponse(result);
         } catch (err) {
@@ -45,7 +45,7 @@ const ResearchPage = () => {
 
     return (
         <div className="page-content text-green-500 border-b p-5">
-            <h1 className="font-bold">Cybersecurity Research</h1>
+            <h1 className="font-bold">Threats and Risks</h1>
             <p>Select a date range to search for cybersecurity threats and risks.</p>
 
             <form onSubmit={handleSubmit}>
@@ -73,7 +73,7 @@ const ResearchPage = () => {
                 <button
                     type="submit"
                     className="mt-5"
-                    disabled={isLoading || !startDate || !endDate || !selectedOllamaServer} // Use selectedOllamaServer
+                    disabled={isLoading || !startDate || !endDate || !selectedOllamaServer}
                 >
                     {isLoading ? "Researching..." : "Start Research"}
                 </button>
@@ -93,4 +93,4 @@ const ResearchPage = () => {
     );
 };
 
-export default ResearchPage;
+export default ThreatsAndRisksPage;

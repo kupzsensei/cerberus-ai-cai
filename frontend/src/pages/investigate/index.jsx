@@ -1,21 +1,20 @@
 import React, { useState } from "react";
-import { researchByDate } from "../../api/apiService";
+import { investigate } from "../../api/apiService";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useOutletContext } from "react-router-dom";
 
-const ResearchPage = () => {
+const InvestigatePage = () => {
     const { selectedOllamaServer, selectedModel, handleModelChange } = useOutletContext();
-    const [startDate, setStartDate] = useState("");
-    const [endDate, setEndDate] = useState("");
+    const [query, setQuery] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [response, setResponse] = useState(null);
     const [error, setError] = useState("");
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!startDate || !endDate) {
-            setError("Please select both start and end dates.");
+        if (!query) {
+            setError("Please enter a query.");
             return;
         }
 
@@ -24,8 +23,7 @@ const ResearchPage = () => {
         setError("");
 
         try {
-            const query = `cybersecurity incidents in Australia from ${startDate} to ${endDate}`;
-            const result = await researchByDate(query, selectedOllamaServer?.name, selectedModel); // Pass selectedOllamaServer.name and model
+            const result = await investigate(query, selectedOllamaServer?.name, selectedModel);
             console.log("API Result:", result);
             setResponse(result);
         } catch (err) {
@@ -45,37 +43,27 @@ const ResearchPage = () => {
 
     return (
         <div className="page-content text-green-500 border-b p-5">
-            <h1 className="font-bold">Cybersecurity Research</h1>
-            <p>Select a date range to search for cybersecurity threats and risks.</p>
+            <h1 className="font-bold">Investigate</h1>
+            <p>Enter a query to investigate an incident or company.</p>
 
             <form onSubmit={handleSubmit}>
                 <div className="prompt-area">
-                    <label htmlFor="startDate">Start Date</label>
+                    <label htmlFor="query">Query</label>
                     <input
-                        type="date"
-                        id="startDate"
+                        type="text"
+                        id="query"
                         className="p-2 border border-green-600 rounded-md text-white bg-green-500/50"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                    />
-                </div>
-                <div className="prompt-area">
-                    <label htmlFor="endDate">End Date</label>
-                    <input
-                        type="date"
-                        id="endDate"
-                        className="p-2 border border-green-600 rounded-md text-white bg-green-500/50"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
                     />
                 </div>
 
                 <button
                     type="submit"
                     className="mt-5"
-                    disabled={isLoading || !startDate || !endDate || !selectedOllamaServer} // Use selectedOllamaServer
+                    disabled={isLoading || !query || !selectedOllamaServer}
                 >
-                    {isLoading ? "Researching..." : "Start Research"}
+                    {isLoading ? "Investigating..." : "Investigate"}
                 </button>
             </form>
 
@@ -83,7 +71,7 @@ const ResearchPage = () => {
 
             {response && response.result && (
                 <div className="response-area">
-                    <h3>Research Results</h3>
+                    <h3>Investigation Results</h3>
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {response.result}
                     </ReactMarkdown>
@@ -93,4 +81,4 @@ const ResearchPage = () => {
     );
 };
 
-export default ResearchPage;
+export default InvestigatePage;

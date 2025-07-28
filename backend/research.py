@@ -202,3 +202,83 @@ def format_raw_results(results, start_count, llm):
     if len(results) < 10:
         output += f"\nOnly [{len(results)}] relevant cybersecurity incidents found for the requested timeframe."
     return output
+
+# Main function for testing
+if __name__ == "__main__":
+    import asyncio
+    async def main():
+        # Example query
+        query = "Cybersecurity incidents in Australia from January 2025 to March 2025"
+        output, generation_time = await perform_search(query)
+        print(output)
+        print(f"Generation time: {generation_time:.2f} seconds")
+    asyncio.run(main())
+
+async def investigate(query: str, ollama_server_name: str = None, ollama_model: str = "granite3.3"):
+    try:
+        # Start timer for the entire research process
+        overall_start_time = time.time()
+
+        # Determine which Ollama server to use
+        selected_server = None
+        if ollama_server_name:
+            selected_server = await database.get_ollama_server_by_name(ollama_server_name)
+
+        if not selected_server:
+            # Fallback to default if not found or not provided
+            all_servers = await database.get_ollama_servers()
+            if all_servers:
+                selected_server = all_servers[0]
+            else:
+                raise ValueError("No Ollama servers configured.")
+
+        ollama_api_url = selected_server['url']
+
+        # Initialize the LLM with the selected server details
+        llm = ChatOllama(
+            model=ollama_model,
+            temperature=0,
+            api_key=openrouter_api_key,
+            base_url=ollama_api_url.replace("/api/generate", "/")
+        )
+
+        # Test connection to the selected Ollama server
+        response = requests.get(f"{ollama_api_url.replace('/api/generate', '')}/api/tags")
+        if response.status_code != 200:
+            raise ConnectionError(f"Failed to connect to Ollama server at {ollama_api_url}")
+
+        # Get raw Tavily results
+        tavily_tool_unrestricted = TavilySearch(
+            max_results=15,
+            topic="general",
+            search_depth="advanced",
+        )
+        raw_results = tavily_tool_unrestricted.invoke(query)
+        logger.info(f"Raw Tavily results: {json.dumps(raw_results, indent=2)}")
+
+        # Generate output from raw results
+        individual_results = format_raw_results(raw_results.get("results", []), 0, llm)
+
+        if not individual_results.strip():
+            logger.warning("No relevant results found")
+            return "No information found for the requested query.", None
+
+        # Generate a consolidated summary
+        summary_prompt = f"Please provide a consolidated summary of the following research findings:\n\n{individual_results}"
+        consolidated_summary = llm.invoke(summary_prompt).content
+
+        # Combine the summary and individual results
+        output = f"# Investigation Summary\n\n{consolidated_summary}\n\n---\n\n# Individual Findings\n\n{individual_results}"
+
+        overall_end_time = time.time()
+        generation_time = overall_end_time - overall_start_time
+
+        await database.add_research(query, output, generation_time, selected_server['name'], ollama_model)
+        return output, generation_time
+    except Exception as e:
+        logger.error(f"Error processing query: {str(e)}")
+        # Check for model-specific errors
+        if "is not supported" in str(e) or "Invalid model" in str(e):
+            error_message = f"The selected model '{ollama_model}' is not suitable for this research task. Please try a different model, such as 'granite3.3'."
+            return error_message, None
+        return f"Error processing query: {str(e)}", None

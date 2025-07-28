@@ -7,6 +7,10 @@ import ResultPage from "./pages/pdf-professor/ResultPage";
 import ResearchPage from "./pages/research";
 import ResearchListPage from "./pages/research/list";
 import ResearchDetailPage from "./pages/research/detail";
+import InvestigatePage from "./pages/investigate";
+import InvestigationListPage from "./pages/investigate/list";
+import InvestigationDetailPage from "./pages/investigate/detail";
+import ThreatsAndRisksPage from "./pages/threats-and-risks";
 
 export const router = createBrowserRouter([
   {
@@ -30,8 +34,8 @@ export const router = createBrowserRouter([
         element: <ResultPage />,
       },
       {
-        path: "/research",
-        element: <ResearchPage />,
+        path: "/threats-and-risks",
+        element: <ThreatsAndRisksPage />,
       },
       {
         path: "/research/list",
@@ -40,6 +44,18 @@ export const router = createBrowserRouter([
       {
         path: "/research/:researchId",
         element: <ResearchDetailPage />,
+      },
+      {
+        path: "/investigate",
+        element: <InvestigatePage />,
+      },
+      {
+        path: "/investigate/list",
+        element: <InvestigationListPage />,
+      },
+      {
+        path: "/investigate/:investigationId",
+        element: <InvestigationDetailPage />,
       },
     ],
   },

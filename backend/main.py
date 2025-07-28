@@ -296,3 +296,15 @@ async def delete_research_endpoint(research_id: int):
     
     await database.delete_research(research_id)
     return {"message": f"Research entry with ID {research_id} successfully deleted."}
+
+@app.post("/investigate")
+async def investigate_endpoint(query: str = Form(...), ollama_server_name: str = Form(None), ollama_model: str = Form('granite3.3')):
+    """
+    Performs an investigation query and returns the results.
+    """
+    if not query:
+        raise HTTPException(status_code=400, detail="A query is required.")
+    
+    result, generation_time = await research.investigate(f"investigation: {query}", ollama_server_name, ollama_model)
+    
+    return {"result": result, "generation_time": generation_time}

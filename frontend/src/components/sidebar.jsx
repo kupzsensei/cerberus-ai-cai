@@ -97,7 +97,7 @@ export default function Sidebar({ ollamaServers, selectedOllamaServer, setSelect
                     <span className="text-green-800  text-xs  drop-shadow-green-600 drop-shadow-md border-green-500 ">
                         Threats and Risks
                     </span>
-                    <NavLink to={'/research'} end className={({ isActive }) => isActive ?
+                    <NavLink to={'/threats-and-risks'} end className={({ isActive }) => isActive ?
                         "text-green-500 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 border  hover:border p-2"
                         : "text-green-700 hover:text-green-500 font-bold   drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2"}>
                         Cybersecurity Research
@@ -106,6 +106,21 @@ export default function Sidebar({ ollamaServers, selectedOllamaServer, setSelect
                         "text-green-500 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 border  hover:border p-2"
                         : "text-green-700 hover:text-green-500 font-bold   drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2"}>
                         Research List
+                    </NavLink>
+                </div>
+                <div className="flex flex-col">
+                    <span className="text-green-800  text-xs  drop-shadow-green-600 drop-shadow-md border-green-500 ">
+                        Investigation
+                    </span>
+                    <NavLink to={'/investigate'} end  className={({ isActive }) => isActive ?
+                        "text-green-500 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 border  hover:border p-2"
+                        : "text-green-700 hover:text-green-500 font-bold   drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2"}>
+                        Investigate
+                    </NavLink>
+                    <NavLink to={'/investigate/list'} end className={({ isActive }) => isActive ?
+                        "text-green-500 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 border  hover:border p-2"
+                        : "text-green-700 hover:text-green-500 font-bold   drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2"}>
+                        Investigation List
                     </NavLink>
                 </div>
                 <span className="text-green-800 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2">

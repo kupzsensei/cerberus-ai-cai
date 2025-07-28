@@ -47,7 +47,7 @@ export const deleteTaskById = async (taskId) => {
   return response.data;
 };
 
-export const research = async (query, ollamaServerName, ollamaModel) => {
+export const researchByDate = async (query, ollamaServerName, ollamaModel) => {
   const formData = new FormData();
   formData.append("query", query);
   if (ollamaServerName) {
@@ -57,6 +57,21 @@ export const research = async (query, ollamaServerName, ollamaModel) => {
     formData.append("ollama_model", ollamaModel);
   }
   const response = await axios.post(`${API_BASE_URL}/research`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+export const investigate = async (query, ollamaServerName, ollamaModel) => {
+  const formData = new FormData();
+  formData.append("query", query);
+  if (ollamaServerName) {
+    formData.append("ollama_server_name", ollamaServerName);
+  }
+  if (ollamaModel) {
+    formData.append("ollama_model", ollamaModel);
+  }
+  const response = await axios.post(`${API_BASE_URL}/investigate`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return response.data;
