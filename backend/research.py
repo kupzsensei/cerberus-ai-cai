@@ -214,6 +214,70 @@ if __name__ == "__main__":
         print(f"Generation time: {generation_time:.2f} seconds")
     asyncio.run(main())
 
+def format_investigation_results(query, results, llm):
+    # Extract content and URLs from results
+    formatted_results = ""
+    for result in results:
+        formatted_results += f"URL: {result.get('url', 'N/A')}\nContent: {result.get('content', 'N/A')}\n\n"
+
+    prompt = f"""
+    As a senior cybersecurity analyst, your task is to produce a detailed and well-structured threat intelligence report based on the provided web search results. The report should be written in Markdown format and follow the structure below.
+
+    **Objective:** Synthesize the provided data into a comprehensive report on the cybersecurity incident: "{query}".
+
+    **Report Structure:**
+
+    1.  **Heading:**
+        - Create a clear, concise heading for the report (e.g., `# {query} Research`).
+
+    2.  **Incident Overview:**
+        - **Who & When:**
+            - **Date of breach:** Specify the date the breach occurred.
+            - **Discovery:** State when the breach was discovered.
+            - **Notification:** Detail when the public or relevant authorities were notified.
+            - **Customer notifications planned:** Mention any planned dates for notifying customers.
+        - **Exposed Data & Scope:**
+            - Describe the platform or system that was breached (e.g., third-party CRM, internal network).
+            - Explain the method used by the threat actor (e.g., social engineering, malware).
+            - List the types of data compromised (e.g., PII, financial credentials).
+        - **Organisation Context:**
+            - Provide background on the affected organization, including its size and industry.
+            - Clarify the scope of the breach (e.g., U.S. operations only).
+        - **Response & Remediation:**
+            - Detail the immediate actions taken by the organization.
+            - Describe the customer protection measures being offered.
+            - Mention the ongoing status of the investigation and any attribution to threat groups.
+
+    3.  **Timeline Summary:**
+        - Create a Markdown table with two columns: "Date" and "Event".
+        - Populate the table with key dates and corresponding events from the incident.
+
+    4.  **MITRE ATT&CK Mapping:**
+        - Identify relevant MITRE ATT&CK techniques based on the incident details.
+        - **Attack Flow Summary:** Describe the likely attack sequence in a few steps.
+        - **Detailed Table:** Create a Markdown table with columns: "MITRE Phase", "Technique/Sub-technique", and "Description & Relevance".
+        - **Security Implications:** Analyze the security implications of the attack.
+        - **Recommendations:** Provide a table with columns: "Control Area" and "Actions", suggesting measures to prevent similar incidents.
+
+    5.  **References:**
+        - List all the source URLs provided in the search results.
+
+    **Input Data:**
+
+    {formatted_results}
+
+    ---
+    **Instructions:**
+    - Ensure all sections are completed thoroughly and accurately based on the provided data.
+    - If specific information is not available in the results, state "Not specified" or "N/A".
+    - Maintain a professional and analytical tone throughout the report.
+    - The final output must be a single, well-formatted Markdown document.
+    """
+
+    # Invoke the LLM with the detailed prompt
+    response = llm.invoke(prompt)
+    return response.content
+
 async def investigate(query: str, ollama_server_name: str = None, ollama_model: str = "granite3.3"):
     try:
         # Start timer for the entire research process
@@ -256,19 +320,12 @@ async def investigate(query: str, ollama_server_name: str = None, ollama_model: 
         raw_results = tavily_tool_unrestricted.invoke(query)
         logger.info(f"Raw Tavily results: {json.dumps(raw_results, indent=2)}")
 
-        # Generate output from raw results
-        individual_results = format_raw_results(raw_results.get("results", []), 0, llm)
+        # Generate the detailed investigation report
+        output = format_investigation_results(query, raw_results.get("results", []), llm)
 
-        if not individual_results.strip():
+        if not output.strip():
             logger.warning("No relevant results found")
             return "No information found for the requested query.", None
-
-        # Generate a consolidated summary
-        summary_prompt = f"Please provide a consolidated summary of the following research findings:\n\n{individual_results}"
-        consolidated_summary = llm.invoke(summary_prompt).content
-
-        # Combine the summary and individual results
-        output = f"# Investigation Summary\n\n{consolidated_summary}\n\n---\n\n# Individual Findings\n\n{individual_results}"
 
         overall_end_time = time.time()
         generation_time = overall_end_time - overall_start_time
