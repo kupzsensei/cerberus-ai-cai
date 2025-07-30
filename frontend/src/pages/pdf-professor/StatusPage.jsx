@@ -53,48 +53,47 @@ const StatusPage = () => {
       <button
         onClick={fetchStatus}
         disabled={isLoading}
-        className="refresh-btn mt-5 border border-green-500 p-2 text-green-50"
-        style={{backgroundColor: 'transparent' , color: 'green' , border: '2px solid green'}}
+        className="mb-4 px-4 py-2 border border-green-500 text-green-500 rounded-md hover:bg-green-500 hover:text-white transition-colors duration-200"
       >
         {isLoading ? "Refreshing..." : "Refresh Now"}
       </button>
-      {error && <div className="error-message">{error}</div>}
+      {error && <div className="error-message text-red-500 mb-4">{error}</div>}
 
-      <div className="task-table-container">
-        <table>
-          <thead>
+      <div className="task-table-container overflow-x-auto bg-gray-800 rounded-lg shadow-lg">
+        <table className="min-w-full divide-y divide-gray-700">
+          <thead className="bg-gray-700">
             <tr>
-              <th>Task ID (Filename)</th>
-              <th>Status</th>
-              <th>Model</th>
-              <th>Processing Time (s)</th>
-              <th>Prompt</th>
-              <th>Last Updated</th>
-              <th style={{textAlign:'center'}}>Action</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Task ID (Filename)</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Model</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Processing Time (s)</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Prompt</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Last Updated</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">Action</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="bg-gray-800 divide-y divide-gray-700">
             {tasks.length > 0 ? (
               tasks.map((task) => (
-                <tr key={task.task_id}>
-                  <td>{task.task_id}</td>
-                  <td>{getStatusChip(task.status)}</td>
-                  <td>{task.ollama_server_name ? `${task.ollama_server_name} (${task.ollama_model || 'N/A'})` : (task.ollama_model || 'N/A')}</td>
-                  <td>{task.processing_time_seconds +" sec" ?? 'N/A'}</td>
-                  <td className="prompt-cell">{task.prompt}</td>
-                  <td>{new Date(task.updated_at).toLocaleString()}</td>
-                  <td className="action-cell flex gap-3 " style={{padding: '2rem'}}>
+                <tr key={task.task_id} className="hover:bg-gray-700">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-400">{task.task_id}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{getStatusChip(task.status)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{task.ollama_server_name ? `${task.ollama_server_name} (${task.ollama_model || 'N/A'})` : (task.ollama_model || 'N/A')}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{task.processing_time_seconds +" sec" ?? 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 prompt-cell">{task.prompt}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{new Date(task.updated_at).toLocaleString()}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex justify-center items-center space-x-3">
                     {task.status === "completed" && (
                       <Link
                         to={`/task-status/${task.task_id}`}
-                        className="view-link"
+                        className="px-3 py-1 border border-indigo-400 text-indigo-400 rounded-md hover:bg-indigo-500 hover:text-white transition-colors duration-200"
                       >
                         View
                       </Link>
                     )}
                      <button
                         onClick={() => handleDelete(task.task_id)}
-                        className="view-link"
+                        className="px-3 py-1 border border-red-400 text-red-400 rounded-md hover:bg-red-500 hover:text-white transition-colors duration-200"
                      >
                         Delete
                      </button>
@@ -103,7 +102,7 @@ const StatusPage = () => {
               ))
             ) : (
               <tr>
-                <td colSpan="7">
+                <td colSpan="7" className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-400">
                   No background tasks found. Upload a file to create one.
                 </td>
               </tr>

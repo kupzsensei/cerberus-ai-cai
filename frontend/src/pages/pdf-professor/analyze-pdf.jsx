@@ -1,21 +1,16 @@
 import React, { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { processMultipleFiles } from "../../api/apiService";
-
-import '../../PdfProfessor.css'
 import { useOutletContext } from "react-router-dom";
 
 const UploadPage = () => {
     const [files, setFiles] = useState([]);
     const [prompt, setPrompt] = useState("");
-    
     const [isLoading, setIsLoading] = useState(false);
     const [response, setResponse] = useState(null);
     const [error, setError] = useState("");
 
     const { selectedModel, selectedOllamaServer } = useOutletContext();
-
-    // console.log('pdfprofessor context',outletContext )
 
     const onDrop = useCallback((acceptedFiles) => {
         setFiles((prevFiles) => [...prevFiles, ...acceptedFiles]);
@@ -30,8 +25,6 @@ const UploadPage = () => {
         setFiles(files.filter((file) => file.name !== fileName));
     };
 
-
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (files.length === 0 || !prompt) {
@@ -44,20 +37,16 @@ const UploadPage = () => {
         setError("");
 
         try {
-            // Create new File objects with timestamped names to prevent overwrites
             const timestampedFiles = files.map(file => {
                 const newName = `${Date.now()}-${file.name}`;
                 return new File([file], newName, { type: file.type });
             });
 
-            // ALWAYS use the background processing endpoint for consistency and to avoid timeouts.
             const result = await processMultipleFiles(prompt, timestampedFiles, selectedModel, selectedOllamaServer.name);
 
-            // The response is now just a confirmation message.
-            // The actual result must be viewed on the Status page.
             setResponse(result);
-            setFiles([]); // Clear files on success
-            setPrompt(""); // Clear prompt on success
+            setFiles([]);
+            setPrompt("");
         } catch (err) {
             const errorMessage =
                 err.response?.data?.detail ||
@@ -73,35 +62,39 @@ const UploadPage = () => {
         }
     };
     return (
-        <div className="page-content text-green-500 border-b p-5">
-            <h1 className="font-bold">Upload and Process PDFs</h1>
-            <p>
+        <div className="page-content p-5">
+            <h1 className="text-2xl font-bold mb-4">Upload and Process PDFs</h1>
+            <p className="text-gray-300 mb-6">
                 Drag 'n' drop PDF files here, or click to select files. The system will
                 automatically choose the correct API endpoint based on the number of
                 files.
             </p>
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} className="space-y-6">
                 <div
                     {...getRootProps()}
-                    className={`dropzone ${isDragActive ? "active" : ""}`}
+                    className={`border-2 border-dashed border-green-500 rounded-lg p-10 text-center cursor-pointer transition-colors duration-200 ${isDragActive ? "bg-green-900/50" : "bg-gray-800 hover:bg-gray-700"}`}
                 >
                     <input {...getInputProps()} />
                     {isDragActive ? (
-                        <p>Drop the files here ...</p>
+                        <p className="text-green-400">Drop the files here ...</p>
                     ) : (
-                        <p>Drag & drop PDFs here, or click to select</p>
+                        <p className="text-gray-400">Drag & drop PDFs here, or click to select</p>
                     )}
                 </div>
 
                 {files.length > 0 && (
-                    <aside className="file-list">
-                        <h4>Selected Files:</h4>
-                        <ul>
+                    <aside className="mt-4 p-4 bg-gray-800 rounded-lg shadow">
+                        <h4 className="text-lg font-semibold text-white mb-2">Selected Files:</h4>
+                        <ul className="list-disc list-inside text-gray-300">
                             {files.map((file) => (
-                                <li key={file.path}>
-                                    {file.path} - {(file.size / 1024).toFixed(2)} KB
-                                    <button type="button" onClick={() => removeFile(file.name)}>
+                                <li key={file.path} className="flex justify-between items-center py-1">
+                                    <span>{file.path} - {(file.size / 1024).toFixed(2)} KB</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => removeFile(file.name)}
+                                        className="ml-4 text-red-400 hover:text-red-600 focus:outline-none"
+                                    >
                                         Remove
                                     </button>
                                 </li>
@@ -109,47 +102,34 @@ const UploadPage = () => {
                         </ul>
                     </aside>
                 )}
-                {/* ADDED: Model Selection Dropdown
-                <div className="prompt-area">
-                    <label htmlFor="ollama-model">Ollama Model</label>
-                    <select
-                        id="ollama-model"
-                        value={ollamaModel}
-                        onChange={(e) => setOllamaModel(e.target.value)}
-                    >
-                        <option value="gemma3">Gemma3</option>
-                        <option value="llama2">Llama2</option>
-                        <option value="mistral">Mistral</option>
-                        <option value="codellama">CodeLlama</option>
-                    </select>
-                </div> */}
 
                 <div className="prompt-area">
-                    <label htmlFor="prompt">Your Prompt</label>
+                    <label htmlFor="prompt" className="block text-lg font-medium text-white mb-2">Your Prompt</label>
                     <textarea
                         id="prompt"
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
                         placeholder="e.g., 'Summarize the key findings in these documents...'"
                         rows="4"
+                        className="w-full p-3 border border-green-600 rounded-md text-white bg-green-500/20 focus:ring-green-500 focus:border-green-500 outline-none"
                     />
                 </div>
 
                 <button
                     type="submit"
-                    className="mt-5"
+                    className="w-full px-4 py-2 border border-green-500 text-green-500 rounded-md hover:bg-green-500 hover:text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={isLoading || files.length === 0 || !prompt}
                 >
                     {isLoading ? "Processing..." : `Process ${files.length} File(s)`}
                 </button>
             </form>
 
-            {error && <div className="error-message">{error}</div>}
+            {error && <div className="error-message text-red-500 mt-4">{error}</div>}
 
             {response && (
-                <div className="response-area">
-                    <h3>Server Response</h3>
-                    <pre>{JSON.stringify(response, null, 2)}</pre>
+                <div className="response-area mt-4 p-4 bg-gray-800 rounded-lg shadow">
+                    <h3 className="text-lg font-semibold text-white mb-2">Server Response</h3>
+                    <pre className="whitespace-pre-wrap text-gray-300 text-sm">{JSON.stringify(response, null, 2)}</pre>
                 </div>
             )}
         </div>

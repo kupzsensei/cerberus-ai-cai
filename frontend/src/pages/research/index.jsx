@@ -44,27 +44,27 @@ const ResearchPage = () => {
     };
 
     return (
-        <div className="page-content text-green-500 border-b p-5">
-            <h1 className="font-bold">Cybersecurity Research</h1>
-            <p>Select a date range to search for cybersecurity threats and risks.</p>
+        <div className="page-content p-5">
+            <h1 className="text-2xl font-bold mb-4">Cybersecurity Research</h1>
+            <p className="text-gray-300 mb-6">Select a date range to search for cybersecurity threats and risks.</p>
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="prompt-area">
-                    <label htmlFor="startDate">Start Date</label>
+                    <label htmlFor="startDate" className="block text-lg font-medium text-white mb-2">Start Date</label>
                     <input
                         type="date"
                         id="startDate"
-                        className="p-2 border border-green-600 rounded-md text-white bg-green-500/50"
+                        className="w-full p-3 border border-green-600 rounded-md text-white bg-green-500/20 focus:ring-green-500 focus:border-green-500 outline-none"
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
                     />
                 </div>
                 <div className="prompt-area">
-                    <label htmlFor="endDate">End Date</label>
+                    <label htmlFor="endDate" className="block text-lg font-medium text-white mb-2">End Date</label>
                     <input
                         type="date"
                         id="endDate"
-                        className="p-2 border border-green-600 rounded-md text-white bg-green-500/50"
+                        className="w-full p-3 border border-green-600 rounded-md text-white bg-green-500/20 focus:ring-green-500 focus:border-green-500 outline-none"
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
                     />
@@ -72,19 +72,19 @@ const ResearchPage = () => {
 
                 <button
                     type="submit"
-                    className="mt-5"
-                    disabled={isLoading || !startDate || !endDate || !selectedOllamaServer} // Use selectedOllamaServer
+                    className="w-full px-4 py-2 border border-green-500 text-green-500 rounded-md hover:bg-green-500 hover:text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isLoading || !startDate || !endDate || !selectedOllamaServer}
                 >
                     {isLoading ? "Researching..." : "Start Research"}
                 </button>
             </form>
 
-            {error && <div className="error-message">{error}</div>}
+            {error && <div className="error-message text-red-500 mt-4">{error}</div>}
 
             {response && response.result && (
-                <div className="response-area">
-                    <h3>Research Results</h3>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <div className="response-area mt-4 p-4 bg-gray-800 rounded-lg shadow">
+                    <h3 className="text-lg font-semibold text-white mb-2">Research Results</h3>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} className="prose prose-invert max-w-none">
                         {response.result}
                     </ReactMarkdown>
                 </div>

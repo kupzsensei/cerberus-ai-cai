@@ -4,7 +4,8 @@ Cerberus AI is a comprehensive full-stack application designed to empower users 
 
 ## Key Features
 
-*   **PDF Analysis & Processing**: Upload single or multiple PDF documents for in-depth analysis. The system intelligently extracts and processes content, providing actionable insights.
+*   **Advanced PDF Analysis & Professional Export**: Upload single or multiple PDF documents for in-depth analysis. The system intelligently extracts and processes content, providing actionable insights. Export reports to professional, high-quality PDFs with selectable text, proper formatting, and pagination.
+*   **Enhanced User Interface (UI/UX)**: Enjoy a clean, consistent, and intuitive user experience across all features, with polished styling and improved readability.
 *   **Dynamic Ollama Integration**: Effortlessly manage and switch between various Ollama servers and their available language models directly from the intuitive frontend UI. This flexibility ensures optimal performance and model selection for diverse tasks.
 *   **Asynchronous Background Processing**: Handles large-scale PDF processing tasks efficiently in the background, preventing timeouts and ensuring a smooth user experience.
 *   **Real-time Task Monitoring**: Keep track of all PDF processing tasks with real-time status updates.
@@ -21,6 +22,8 @@ Cerberus AI is a comprehensive full-stack application designed to empower users 
     *   Nginx - High-performance web server for serving static files and API proxying.
     *   Tailwind CSS - A utility-first CSS framework for rapid UI development.
     *   `react-icons` - A library for popular icon packs.
+    *   `remark`, `strip-markdown` - Libraries for parsing and stripping Markdown.
+    *   `postcss-preset-env` - A PostCSS plugin to transform modern CSS into something most browsers can understand.
 *   **Backend**:
     *   FastAPI (Python) - A fast, modern, web framework for building APIs with Python 3.7+.
     *   Uvicorn - An ASGI server for FastAPI applications.
