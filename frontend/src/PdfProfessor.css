@@ -235,12 +235,25 @@ th {
 }
 .status-chip.in_progress {
   background-color: var(--in-progress);
+  padding: 4px 10px;
 }
 .status-chip.pending {
   background-color: var(--pending);
 }
 .status-chip.failed {
   background-color: var(--failed);
+}
+
+.prompt-cell {
+  max-width: 500px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  /* -webkit-line-clamp: 4; */
+  -webkit-box-orient: vertical;
+  line-height: 1.5em; /* Adjust this value to your font size */
+  max-height: 6em; /* 1.5em * 4 lines */
+  padding-bottom: 1rem; /* Add padding to the bottom */
 }
 
 /* src/App.css */

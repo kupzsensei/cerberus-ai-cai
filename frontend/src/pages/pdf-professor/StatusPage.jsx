@@ -80,23 +80,25 @@ const StatusPage = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{getStatusChip(task.status)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{task.ollama_server_name ? `${task.ollama_server_name} (${task.ollama_model || 'N/A'})` : (task.ollama_model || 'N/A')}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{task.processing_time_seconds +" sec" ?? 'N/A'}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 prompt-cell">{task.prompt}</td>
+                  <td className="px-6 py-4 text-sm text-gray-200 prompt-cell max-w-[400px] max-h-[100px] overflow-ellipsis">{task.prompt}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{new Date(task.updated_at).toLocaleString()}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex justify-center items-center space-x-3">
-                    {task.status === "completed" && (
-                      <Link
-                        to={`/task-status/${task.task_id}`}
-                        className="px-3 py-1 border border-indigo-400 text-indigo-400 rounded-md hover:bg-indigo-500 hover:text-white transition-colors duration-200"
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex justify-center items-center space-x-3 h-full">
+                      {task.status === "completed" && (
+                        <Link
+                          to={`/task-status/${task.task_id}`}
+                          className="px-3 py-1 border border-indigo-400 text-indigo-400 rounded-md hover:bg-indigo-500 hover:text-white transition-colors duration-200"
+                        >
+                          View
+                        </Link>
+                      )}
+                      <button
+                          onClick={() => handleDelete(task.task_id)}
+                          className="px-3 py-1 border border-red-400 text-red-400 rounded-md hover:bg-red-500 hover:text-white transition-colors duration-200"
                       >
-                        View
-                      </Link>
-                    )}
-                     <button
-                        onClick={() => handleDelete(task.task_id)}
-                        className="px-3 py-1 border border-red-400 text-red-400 rounded-md hover:bg-red-500 hover:text-white transition-colors duration-200"
-                     >
-                        Delete
-                     </button>
+                          Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
