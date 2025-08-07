@@ -25,7 +25,7 @@ const ThreatsAndRisksPage = () => {
 
         try {
             const query = `cybersecurity incidents in Australia from ${startDate} to ${endDate}`;
-            const result = await researchByDate(query, selectedOllamaServer?.name, selectedModel);
+            const result = await researchByDate(query, selectedOllamaServer?.name, selectedModel , selectedOllamaServer?.type);
             console.log("API Result:", result);
             setResponse(result);
         } catch (err) {

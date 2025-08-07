@@ -11,6 +11,9 @@ import InvestigatePage from "./pages/investigate";
 import InvestigationListPage from "./pages/investigate/list";
 import InvestigationDetailPage from "./pages/investigate/detail";
 import ThreatsAndRisksPage from "./pages/threats-and-risks";
+import LocalStoragePage from "./pages/local-storage/index.jsx";
+import LocalStorageResultPage from "./pages/local-storage/result.jsx";
+import LocalStorageHistoryPage from "./pages/local-storage/history.jsx";
 
 export const router = createBrowserRouter([
   {
@@ -36,6 +39,7 @@ export const router = createBrowserRouter([
       {
         path: "/threats-and-risks",
         element: <ThreatsAndRisksPage />,
+        // element: <ResearchPage />,
       },
       {
         path: "/research/list",
@@ -56,6 +60,18 @@ export const router = createBrowserRouter([
       {
         path: "/investigate/:investigationId",
         element: <InvestigationDetailPage />,
+      },
+      {
+        path: "/local-storage",
+        element: <LocalStoragePage />,
+      },
+      {
+        path: "/local-storage/result/:jobId",
+        element: <LocalStorageResultPage />,
+      },
+      {
+        path: "/local-storage/history",
+        element: <LocalStorageHistoryPage />,
       },
     ],
   },

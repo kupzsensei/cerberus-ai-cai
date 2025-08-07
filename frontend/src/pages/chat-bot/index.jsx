@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
 import MarkdownRenderer from "../../components/MarkdownRenderer";
-import { OLLAMA_BASE_URL } from "../../api";
+import { chatWithAI } from "../../api/apiService";
 
 const SendIcon = () => (
     <svg
@@ -35,7 +35,7 @@ const initialMessages = [
 ];
 
 export default function Chatbot() {
-    const { selectedModel, setSelectedModel } = useOutletContext();
+    const { selectedModel, selectedOllamaServer } = useOutletContext();
     const [messages, setMessages] = useState(initialMessages);
     const [userInput, setUserInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -127,24 +127,12 @@ export default function Chatbot() {
 
         const startTime = performance.now();
         try {
-            const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    model: selectedModel,
-                    messages: messagesForAPI,
-                    stream: false,
-                }),
-            });
+            const data = await chatWithAI(messagesForAPI, selectedModel, selectedOllamaServer.name, selectedOllamaServer.type);
 
             const endTime = performance.now();
             const duration = ((endTime - startTime) / 1000).toFixed(2);
 
             setIsLoading(false);
-            if (!response.ok)
-                throw new Error(`HTTP error! status: ${response.status}`);
-
-            const data = await response.json();
             if (data.message?.content) {
                 const assistantMessage = {
                     role: "assistant",

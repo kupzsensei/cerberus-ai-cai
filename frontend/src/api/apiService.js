@@ -7,22 +7,25 @@ const API_BASE_URL = "/api";
 
 // --- Ensure ALL functions below use this relative path ---
 
-export const processSingleFile = async (prompt, file, ollamaModel) => {
+export const processSingleFile = async (prompt, file, modelName, serverName, serverType) => {
   const formData = new FormData();
   formData.append("prompt", prompt);
   formData.append("file", file);
-  formData.append("ollama_model", ollamaModel);
+  formData.append("model_name", modelName);
+  formData.append("server_name", serverName);
+  formData.append("server_type", serverType);
   const response = await axios.post(`${API_BASE_URL}/pdfprofessor`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return response.data;
 };
 
-export const processMultipleFiles = async (prompt, files, ollamaModel, ollamaServerName) => {
+export const processMultipleFiles = async (prompt, files, modelName, serverName, serverType) => {
   const formData = new FormData();
   formData.append("user_prompt", prompt);
-  formData.append("ollama_model", ollamaModel);
-  formData.append("ollama_server_name", ollamaServerName); // Add server name
+  formData.append("model_name", modelName);
+  formData.append("server_name", serverName);
+  formData.append("server_type", serverType);
   files.forEach((file) => {
     formData.append("files", file);
   });
@@ -47,14 +50,17 @@ export const deleteTaskById = async (taskId) => {
   return response.data;
 };
 
-export const researchByDate = async (query, ollamaServerName, ollamaModel) => {
+export const researchByDate = async (query, serverName, modelName, serverType) => {
   const formData = new FormData();
   formData.append("query", query);
-  if (ollamaServerName) {
-    formData.append("ollama_server_name", ollamaServerName);
+  if (serverName) {
+    formData.append("server_name", serverName);
   }
-  if (ollamaModel) {
-    formData.append("ollama_model", ollamaModel);
+  if (modelName) {
+    formData.append("model_name", modelName);
+  }
+  if (serverType) {
+    formData.append("server_type", serverType);
   }
   const response = await axios.post(`${API_BASE_URL}/research`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
@@ -62,14 +68,17 @@ export const researchByDate = async (query, ollamaServerName, ollamaModel) => {
   return response.data;
 };
 
-export const investigate = async (query, ollamaServerName, ollamaModel) => {
+export const investigate = async (query, serverName, modelName, serverType) => {
   const formData = new FormData();
   formData.append("query", query);
-  if (ollamaServerName) {
-    formData.append("ollama_server_name", ollamaServerName);
+  if (serverName) {
+    formData.append("server_name", serverName);
   }
-  if (ollamaModel) {
-    formData.append("ollama_model", ollamaModel);
+  if (modelName) {
+    formData.append("model_name", modelName);
+  }
+  if (serverType) {
+    formData.append("server_type", serverType);
   }
   const response = await axios.post(`${API_BASE_URL}/investigate`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
@@ -82,11 +91,7 @@ export const getOllamaServers = async () => {
   return response.data.servers;
 };
 
-export const addOllamaServer = async (name, url, model) => {
-  const formData = new FormData();
-  formData.append("name", name);
-  formData.append("url", url);
-  formData.append("model", model);
+export const addOllamaServer = async (formData) => {
   const response = await axios.post(`${API_BASE_URL}/ollama-servers`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
@@ -95,6 +100,23 @@ export const addOllamaServer = async (name, url, model) => {
 
 export const deleteOllamaServer = async (name) => {
   const response = await axios.delete(`${API_BASE_URL}/ollama-servers/${name}`);
+  return response.data;
+};
+
+export const getExternalAIServers = async () => {
+  const response = await axios.get(`${API_BASE_URL}/external-ai-servers`);
+  return response.data.servers;
+};
+
+export const addExternalAIServer = async (formData) => {
+  const response = await axios.post(`${API_BASE_URL}/external-ai-servers`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+export const deleteExternalAIServer = async (name) => {
+  const response = await axios.delete(`${API_BASE_URL}/external-ai-servers/${name}`);
   return response.data;
 };
 
@@ -115,5 +137,61 @@ export const deleteResearchById = async (researchId) => {
 
 export const getOllamaModels = async (url) => {
   const response = await axios.get(`${API_BASE_URL}/ollama-models?url=${encodeURIComponent(url)}`);
+  return response.data;
+};
+
+export const getExternalAIModels = async (serverType) => {
+  const response = await axios.get(`${API_BASE_URL}/external-ai/models?server_type=${encodeURIComponent(serverType)}`);
+  return response.data;
+};
+
+export const getLocalStorageFiles = async () => {
+  const response = await axios.get(`${API_BASE_URL}/local-storage/files`);
+  return response.data;
+};
+
+export const uploadToLocalStorage = async (formData) => {
+  const response = await axios.post(`${API_BASE_URL}/local-storage/upload`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+export const deleteLocalStorageFile = async (filename) => {
+  const response = await axios.delete(`${API_BASE_URL}/local-storage/files/${filename}`);
+  return response.data;
+};
+
+export const queryLocalStorageFiles = async (formData) => {
+  const response = await axios.post(`${API_BASE_URL}/local-storage/query`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+export const getLocalStorageJobStatus = async (jobId) => {
+  const response = await axios.get(`${API_BASE_URL}/local-storage/status/${jobId}`);
+  return response.data;
+};
+
+export const getAllLocalStorageJobs = async () => {
+  const response = await axios.get(`${API_BASE_URL}/local-storage/jobs`);
+  return response.data;
+};
+
+export const deleteLocalStorageJob = async (jobId) => {
+  const response = await axios.delete(`${API_BASE_URL}/local-storage/jobs/${jobId}`);
+  return response.data;
+};
+
+export const chatWithAI = async (messages, modelName, serverName, serverType) => {
+  const formData = new FormData();
+  formData.append("messages", JSON.stringify(messages));
+  formData.append("model_name", modelName);
+  formData.append("server_name", serverName);
+  formData.append("server_type", serverType);
+  const response = await axios.post(`${API_BASE_URL}/chat`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
   return response.data;
 };

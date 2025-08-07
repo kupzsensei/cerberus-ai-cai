@@ -64,6 +64,34 @@ async def process_with_ollama_api(client: httpx.AsyncClient, text_chunk: str, us
         logging.error(f"An unexpected error occurred while contacting Ollama API with model {model_name}: {e}")
         return "[Error: An unexpected error occurred]"
 
+async def process_with_gemini_api(client: httpx.AsyncClient, text_chunk: str, user_prompt: str, model_name: str, api_key: str) -> str:
+    """Sends a text chunk to the Gemini API for processing using a specific model."""
+    combined_prompt = f"{user_prompt}\n\n---\n\n{text_chunk}"
+    payload = {
+        "contents": [{
+            "parts": [{
+                "text": combined_prompt
+            }]
+        }]
+    }
+    try:
+        logging.info(f"Sending request to Gemini with model: {model_name}")
+        full_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        logging.info(f"Sending request to Gemini URL: {full_url}")
+        response = await client.post(full_url, json=payload, timeout=180.0)
+        response.raise_for_status()  # Raises an exception for 4xx or 5xx status codes
+        api_response = response.json()
+        return api_response.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+    except httpx.ReadTimeout:
+        logging.error(f"Gemini API timed out with model: {model_name}!")
+        return f"[Error: Gemini processing timed out with model: {model_name}]"
+    except httpx.HTTPStatusError as e:
+        logging.error(f"Gemini API request with model {model_name} failed with status {e.response.status_code}: {e.response.text}")
+        return f"[Error: Gemini API failed with status {e.response.status_code}]"
+    except Exception as e:
+        logging.error(f"An unexpected error occurred while contacting Gemini API with model {model_name}: {e}")
+        return "[Error: An unexpected error occurred]"
+
 def perform_ocr_on_pdf_bytes(file_content: bytes) -> str:
     """
     Performs OCR on each page of a PDF and returns the combined text.
@@ -134,15 +162,14 @@ async def process_pdf_content(
     user_prompt: str, 
     client: httpx.AsyncClient,
     model_name: str,  # Pass the model name to be used
-    ollama_api_url: str # Pass the Ollama API URL to be used
+    server_type: str, # New: Pass the server type
+    server_url_or_key: str # New: Pass either URL (for Ollama) or API Key (for Gemini)
 ) -> str:
     """
-    Processes the content of a PDF file asynchronously using the Ollama API.
+    Processes the content of a PDF file asynchronously using the specified AI API.
     """
-    # read_pdf_from_bytes now handles both text and image-based PDFs
     content = read_pdf_from_bytes(file_content)
     if not content or content.startswith("[Error:"):
-        # If content extraction failed, return the error message.
         logging.error(f"Failed to extract content from PDF. Result: {content}")
         return content if content else "Could not extract any text from the provided PDF."
 
@@ -150,8 +177,41 @@ async def process_pdf_content(
     processed_content_parts = []
     
     for chunk in chunks:
-            # Pass the model_name and ollama_api_url down to the API call function
-            processed_chunk = await process_with_ollama_api(client, chunk, user_prompt, model_name, ollama_api_url)
-            processed_content_parts.append(processed_chunk)
+        if server_type == "ollama":
+            processed_chunk = await process_with_ollama_api(client, chunk, user_prompt, model_name, server_url_or_key)
+        elif server_type == "gemini":
+            processed_chunk = await process_with_gemini_api(client, chunk, user_prompt, model_name, server_url_or_key)
+        else:
+            return f"[Error: Unsupported server type: {server_type}]"
+        processed_content_parts.append(processed_chunk)
+    
+    return "".join(processed_content_parts)
+
+async def process_text_content(
+    text_content: str, 
+    user_prompt: str, 
+    client: httpx.AsyncClient,
+    model_name: str,  # Pass the model name to be used
+    server_type: str, # New: Pass the server type
+    server_url_or_key: str # New: Pass either URL (for Ollama) or API Key (for Gemini)
+) -> str:
+    """
+    Processes a string of text asynchronously using the specified AI API.
+    """
+    if not text_content or text_content.startswith("[Error:"):
+        logging.error(f"Invalid text content provided. Content: {text_content}")
+        return text_content if text_content else "Could not process empty text."
+
+    chunks = [text_content[i:i + CHUNK_SIZE] for i in range(0, len(text_content), CHUNK_SIZE)]
+    processed_content_parts = []
+    
+    for chunk in chunks:
+        if server_type == "ollama":
+            processed_chunk = await process_with_ollama_api(client, chunk, user_prompt, model_name, server_url_or_key)
+        elif server_type == "gemini":
+            processed_chunk = await process_with_gemini_api(client, chunk, user_prompt, model_name, server_url_or_key)
+        else:
+            return f"[Error: Unsupported server type: {server_type}]"
+        processed_content_parts.append(processed_chunk)
     
     return "".join(processed_content_parts)

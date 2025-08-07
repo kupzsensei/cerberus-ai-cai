@@ -76,3 +76,5 @@ langchain-ollama
 langchain-tavily
 langchain-core
 langgraph
+uuid==1.30
+langchain-google-genai

@@ -2,6 +2,7 @@ import os
 import logging
 from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_tavily import TavilySearch
 import requests
 import json
@@ -46,38 +47,52 @@ tavily_tool = TavilySearch(
 )
 
 # Function to perform a search
-async def perform_search(query, ollama_server_name: str = None, ollama_model: str = "granite3.3"):
+async def perform_search(query, server_name: str = None, model_name: str = "granite3.3", server_type: str = "ollama"):
     try:
         # Start timer for the entire research process
         overall_start_time = time.time()
 
-        # Determine which Ollama server to use
+        # Determine which AI server to use
         selected_server = None
-        if ollama_server_name:
-            selected_server = await database.get_ollama_server_by_name(ollama_server_name)
-        
-        if not selected_server:
-            # Fallback to default if not found or not provided
-            all_servers = await database.get_ollama_servers()
-            if all_servers:
-                selected_server = all_servers[0]
-            else:
-                raise ValueError("No Ollama servers configured.")
-        
-        ollama_api_url = selected_server['url']
+        server_url_or_key = None
 
-        # Initialize the LLM with the selected server details
-        llm = ChatOllama(
-            model=ollama_model,
-            temperature=0,
-            api_key=openrouter_api_key,
-            base_url=ollama_api_url.replace("/api/generate", "/")
-        )
-
-        # Test connection to the selected Ollama server
-        response = requests.get(f"{ollama_api_url.replace('/api/generate', '')}/api/tags")
-        if response.status_code != 200:
-            raise ConnectionError(f"Failed to connect to Ollama server at {ollama_api_url}")
+        if server_type == "ollama":
+            if server_name:
+                selected_server = await database.get_ollama_server_by_name(server_name)
+            if not selected_server:
+                all_servers = await database.get_ollama_servers()
+                if all_servers:
+                    selected_server = all_servers[0]
+                else:
+                    raise ValueError("No Ollama servers configured.")
+            server_url_or_key = selected_server['url']
+            llm = ChatOllama(
+                model=model_name,
+                temperature=0,
+                api_key=os.environ.get("OPENROUTER_API_KEY"),
+                base_url=server_url_or_key.replace("/api/generate", "/")
+            )
+            # Test connection to the selected Ollama server
+            response = requests.get(f"{server_url_or_key.replace('/api/generate', '')}/api/tags")
+            if response.status_code != 200:
+                raise ConnectionError(f"Failed to connect to Ollama server at {server_url_or_key}")
+        elif server_type == "gemini":
+            if server_name:
+                selected_server = await database.get_external_ai_server_by_name(server_name)
+            if not selected_server:
+                all_servers = await database.get_external_ai_servers()
+                if all_servers:
+                    selected_server = all_servers[0]
+                else:
+                    raise ValueError("No Gemini servers configured.")
+            server_url_or_key = selected_server['api_key']
+            llm = ChatGoogleGenerativeAI(
+                model=f"models/gemini-1.5-flash",
+                temperature=0,
+                google_api_key=server_url_or_key
+            )
+        else:
+            raise ValueError(f"Unsupported server type: {server_type}")
 
         # Preprocess query with unique timestamp to avoid caching
         if "Australia" not in query:
@@ -118,13 +133,13 @@ async def perform_search(query, ollama_server_name: str = None, ollama_model: st
         overall_end_time = time.time()
         generation_time = overall_end_time - overall_start_time
 
-        await database.add_research(query, output, generation_time, selected_server['name'], ollama_model)
+        await database.add_research(query, output, generation_time, selected_server['name'], model_name)
         return output, generation_time
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}")
         # Check for model-specific errors
         if "is not supported" in str(e) or "Invalid model" in str(e):
-            error_message = f"The selected model '{ollama_model}' is not suitable for this research task. Please try a different model, such as 'granite3.3'."
+            error_message = f"The selected model '{model_name}' is not suitable for this research task. Please try a different model, such as 'granite3.3'."
             return error_message, None
         return f"Error processing query: {str(e)}", None
 
@@ -278,38 +293,51 @@ def format_investigation_results(query, results, llm):
     response = llm.invoke(prompt)
     return response.content
 
-async def investigate(query: str, ollama_server_name: str = None, ollama_model: str = "granite3.3"):
+async def investigate(query: str, server_name: str = None, model_name: str = "granite3.3", server_type: str = "ollama"):
     try:
         # Start timer for the entire research process
         overall_start_time = time.time()
 
-        # Determine which Ollama server to use
         selected_server = None
-        if ollama_server_name:
-            selected_server = await database.get_ollama_server_by_name(ollama_server_name)
+        server_url_or_key = None
 
-        if not selected_server:
-            # Fallback to default if not found or not provided
-            all_servers = await database.get_ollama_servers()
-            if all_servers:
-                selected_server = all_servers[0]
-            else:
-                raise ValueError("No Ollama servers configured.")
-
-        ollama_api_url = selected_server['url']
-
-        # Initialize the LLM with the selected server details
-        llm = ChatOllama(
-            model=ollama_model,
-            temperature=0,
-            api_key=openrouter_api_key,
-            base_url=ollama_api_url.replace("/api/generate", "/")
-        )
-
-        # Test connection to the selected Ollama server
-        response = requests.get(f"{ollama_api_url.replace('/api/generate', '')}/api/tags")
-        if response.status_code != 200:
-            raise ConnectionError(f"Failed to connect to Ollama server at {ollama_api_url}")
+        if server_type == "ollama":
+            if server_name:
+                selected_server = await database.get_ollama_server_by_name(server_name)
+            if not selected_server:
+                all_servers = await database.get_ollama_servers()
+                if all_servers:
+                    selected_server = all_servers[0]
+                else:
+                    raise ValueError("No Ollama servers configured.")
+            server_url_or_key = selected_server['url']
+            llm = ChatOllama(
+                model=model_name,
+                temperature=0,
+                api_key=os.environ.get("OPENROUTER_API_KEY"),
+                base_url=server_url_or_key.replace("/api/generate", "/")
+            )
+            # Test connection to the selected Ollama server
+            response = requests.get(f"{server_url_or_key.replace('/api/generate', '')}/api/tags")
+            if response.status_code != 200:
+                raise ConnectionError(f"Failed to connect to Ollama server at {server_url_or_key}")
+        elif server_type == "gemini":
+            if server_name:
+                selected_server = await database.get_external_ai_server_by_name(server_name)
+            if not selected_server:
+                all_servers = await database.get_external_ai_servers()
+                if all_servers:
+                    selected_server = all_servers[0]
+                else:
+                    raise ValueError("No Gemini servers configured.")
+            server_url_or_key = selected_server['api_key']
+            llm = ChatGoogleGenerativeAI(
+                model=f"models/gemini-1.5-flash",
+                temperature=0,
+                google_api_key=server_url_or_key
+            )
+        else:
+            raise ValueError(f"Unsupported server type: {server_type}")
 
         # Get raw Tavily results
         tavily_tool_unrestricted = TavilySearch(
@@ -330,12 +358,12 @@ async def investigate(query: str, ollama_server_name: str = None, ollama_model: 
         overall_end_time = time.time()
         generation_time = overall_end_time - overall_start_time
 
-        await database.add_research(query, output, generation_time, selected_server['name'], ollama_model)
+        await database.add_research(query, output, generation_time, selected_server['name'], model_name)
         return output, generation_time
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}")
         # Check for model-specific errors
         if "is not supported" in str(e) or "Invalid model" in str(e):
-            error_message = f"The selected model '{ollama_model}' is not suitable for this research task. Please try a different model, such as 'granite3.3'."
+            error_message = f"The selected model '{model_name}' is not suitable for this research task. Please try a different model, such as 'granite3.3'."
             return error_message, None
         return f"Error processing query: {str(e)}", None

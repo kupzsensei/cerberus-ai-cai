@@ -20,8 +20,8 @@ async def initialize_db():
                 task_id TEXT PRIMARY KEY,
                 status TEXT NOT NULL,
                 prompt TEXT,
-                ollama_model TEXT,
-                ollama_server_name TEXT,
+                model_name TEXT,
+                server_name TEXT,
                 result TEXT,
                 created_at TIMESTAMP NOT NULL,
                 updated_at TIMESTAMP NOT NULL,
@@ -34,9 +34,52 @@ async def initialize_db():
                 url TEXT NOT NULL
             )
         ''')
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS external_ai_servers (
+                name TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                api_key TEXT NOT NULL
+            )
+        ''')
         await db.commit()
 
-async def add_or_update_task(task_id: str, prompt: str, ollama_model: str, ollama_server_name: str):
+async def add_external_ai_server(name: str, type: str, api_key: str):
+    """Adds a new external AI server to the database."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute(
+            """
+            INSERT OR REPLACE INTO external_ai_servers (name, type, api_key)
+            VALUES (?, ?, ?)
+            """,
+            (name, type, api_key)
+        )
+        await db.commit()
+
+async def get_external_ai_servers():
+    """Retrieves all configured external AI servers from the database."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT name, type, api_key FROM external_ai_servers ORDER BY name") as cursor:
+            servers = await cursor.fetchall()
+            return [dict(row) for row in servers]
+
+async def get_external_ai_server_by_name(name: str):
+    """Retrieves a single external AI server from the database by name."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT name, type, api_key FROM external_ai_servers WHERE name = ?", (name,)) as cursor:
+            server = await cursor.fetchone()
+            if server:
+                return dict(server)
+            return None
+
+async def delete_external_ai_server(name: str):
+    """Deletes an external AI server from the database."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute("DELETE FROM external_ai_servers WHERE name = ?", (name,))
+        await db.commit()
+
+async def add_or_update_task(task_id: str, prompt: str, model_name: str, server_name: str):
     """
     Adds a new task, or resets an existing one, clearing the old processing time.
     """
@@ -45,10 +88,10 @@ async def add_or_update_task(task_id: str, prompt: str, ollama_model: str, ollam
         await db.execute(
             """
             INSERT OR REPLACE INTO tasks 
-            (task_id, status, prompt, ollama_model, ollama_server_name, result, created_at, updated_at, processing_time_seconds) 
+            (task_id, status, prompt, model_name, server_name, result, created_at, updated_at, processing_time_seconds) 
             VALUES (?, 'pending', ?, ?, ?, NULL, ?, ?, NULL)
             """,
-            (task_id, prompt, ollama_model, ollama_server_name, now, now)
+            (task_id, prompt, model_name, server_name, now, now)
         )
         await db.commit()
 
@@ -195,4 +238,108 @@ async def delete_research(research_id: int):
     """Deletes a research entry from the database."""
     async with aiosqlite.connect(DATABASE_FILE) as db:
         await db.execute("DELETE FROM research WHERE id = ?", (research_id,))
+        await db.commit()
+
+async def initialize_local_storage_db():
+    """Initializes the database and creates the local_storage_jobs table if it doesn't exist."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS local_storage_jobs (
+                job_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                prompt TEXT,
+                ollama_model TEXT,
+                ollama_server_name TEXT,
+                filenames TEXT,
+                result TEXT,
+                created_at TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP NOT NULL,
+                processing_time_seconds REAL
+            )
+        ''')
+        await db.commit()
+
+async def add_local_storage_job(job_id: str, prompt: str, ollama_model: str, ollama_server_name: str, filenames: list):
+    """Adds a new local storage job."""
+    now = datetime.now(ADELAIDE_TZ)
+    filenames_json = json.dumps(filenames)
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute(
+            """
+            INSERT OR REPLACE INTO local_storage_jobs 
+            (job_id, status, prompt, ollama_model, ollama_server_name, filenames, result, created_at, updated_at, processing_time_seconds) 
+            VALUES (?, 'pending', ?, ?, ?, ?, NULL, ?, ?, NULL)
+            """,
+            (job_id, prompt, ollama_model, ollama_server_name, filenames_json, now, now)
+        )
+        await db.commit()
+
+async def update_local_storage_job(job_id: str, status: str, result: dict = None, processing_time: float = None):
+    """Updates a local storage job's status and result."""
+    now = datetime.now(ADELAIDE_TZ)
+    result_json = json.dumps(result) if result else None
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        if processing_time is not None:
+            await db.execute(
+                """
+                UPDATE local_storage_jobs 
+                SET status = ?, result = ?, updated_at = ?, processing_time_seconds = ?
+                WHERE job_id = ?
+                """,
+                (status, result_json, now, round(processing_time, 2), job_id)
+            )
+        else:
+            await db.execute(
+                "UPDATE local_storage_jobs SET status = ?, result = ?, updated_at = ? WHERE job_id = ?",
+                (status, result_json, now, job_id)
+            )
+        await db.commit()
+
+async def get_local_storage_job(job_id: str):
+    """Retrieves a single local storage job from the database."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM local_storage_jobs WHERE job_id = ?", (job_id,)) as cursor:
+            job = await cursor.fetchone()
+            if job:
+                job_dict = dict(job)
+                if job_dict.get('result'):
+                    job_dict['result'] = json.loads(job_dict['result'])
+                if job_dict.get('filenames'):
+                    job_dict['filenames'] = json.loads(job_dict['filenames'])
+                return job_dict
+            return None
+
+async def get_all_local_storage_jobs():
+    """Retrieves all local storage jobs from the database."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM local_storage_jobs ORDER BY created_at DESC") as cursor:
+            jobs = await cursor.fetchall()
+            job_list = []
+            for job in jobs:
+                job_dict = dict(job)
+                if job_dict.get('result'):
+                    job_dict['result'] = json.loads(job_dict['result'])
+                if job_dict.get('filenames'):
+                    job_dict['filenames'] = json.loads(job_dict['filenames'])
+                job_list.append(job_dict)
+            return job_list
+
+async def delete_local_storage_job(job_id: str):
+    """Deletes a local storage job from the database."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute("DELETE FROM local_storage_jobs WHERE job_id = ?", (job_id,))
+        await db.commit()
+
+async def initialize_external_ai_db():
+    """Initializes the database and creates the external_ai_servers table if it doesn't exist."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS external_ai_servers (
+                name TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                api_key TEXT NOT NULL
+            )
+        ''')
         await db.commit()

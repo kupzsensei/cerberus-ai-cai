@@ -85,7 +85,9 @@ const ResultPage = () => {
         <h1>Result for: {task.task_id}</h1>
         {/* --- ADDED: Task metadata --- */}
         <div className="task-metadata">
-            <p><strong>Model Used:</strong> {task.ollama_model || 'N/A'}</p>
+            <p><strong>Query:</strong> {task.prompt || 'N/A'}</p>
+            <p><strong>Model Used:</strong> {task.model_name || 'N/A'}</p>
+            <p><strong>Server:</strong> {task.server_name || 'N/A'} ({task.server_type || 'N/A'})</p>
             <p><strong>Processing Time:</strong> {task.processing_time_seconds ? `${task.processing_time_seconds} seconds` : 'N/A'}</p>
         </div>
         <div

@@ -42,7 +42,7 @@ const UploadPage = () => {
                 return new File([file], newName, { type: file.type });
             });
 
-            const result = await processMultipleFiles(prompt, timestampedFiles, selectedModel, selectedOllamaServer.name);
+            const result = await processMultipleFiles(prompt, timestampedFiles, selectedModel, selectedOllamaServer.name, selectedOllamaServer.type);
 
             setResponse(result);
             setFiles([]);

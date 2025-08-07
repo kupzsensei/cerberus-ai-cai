@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { useOutletContext } from "react-router-dom";
 
 const ResearchPage = () => {
-    const { selectedOllamaServer, selectedModel, handleModelChange } = useOutletContext();
+    const { selectedOllamaServer, selectedModel } = useOutletContext();
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -13,9 +13,14 @@ const ResearchPage = () => {
     const [error, setError] = useState("");
 
     const handleSubmit = async (e) => {
+        console.log("research submit is triggered!")
         e.preventDefault();
-        if (!startDate || !endDate) {
-            setError("Please select both start and end dates.");
+        console.log("startDate before validation:", startDate);
+        console.log("endDate before validation:", endDate);
+        console.log("selectedOllamaServer before validation:", selectedOllamaServer);
+        console.log("selectedModel before validation:", selectedModel);
+        if (!startDate || !endDate || !selectedOllamaServer || !selectedModel) {
+            setError("Please select both start and end dates, and ensure a server and model are selected.");
             return;
         }
 
@@ -25,7 +30,22 @@ const ResearchPage = () => {
 
         try {
             const query = `cybersecurity incidents in Australia from ${startDate} to ${endDate}`;
-            const result = await researchByDate(query, selectedOllamaServer?.name, selectedModel); // Pass selectedOllamaServer.name and model
+            const formData = new FormData();
+            formData.append("query", query);
+            if (selectedOllamaServer?.name) {
+                formData.append("server_name", selectedOllamaServer.name);
+            }
+            if (selectedModel) {
+                formData.append("model_name", selectedModel);
+            }
+            if (selectedOllamaServer?.type) {
+                console.log("selectedOllamaServer.type before append:", selectedOllamaServer.type);
+                formData.append("server_type", selectedOllamaServer.type);
+            }
+            for (let [key, value] of formData.entries()) {
+                console.log(`${key}: ${value}`);
+            }
+            const result = await researchByDate(formData);
             console.log("API Result:", result);
             setResponse(result);
         } catch (err) {

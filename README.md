@@ -6,7 +6,7 @@ Cerberus AI is a comprehensive full-stack application designed to empower users 
 
 *   **Advanced PDF Analysis & Professional Export**: Upload single or multiple PDF documents for in-depth analysis. The system intelligently extracts and processes content, providing actionable insights. Export reports to professional, high-quality PDFs with selectable text, proper formatting, and pagination.
 *   **Enhanced User Interface (UI/UX)**: Enjoy a clean, consistent, and intuitive user experience across all features, with polished styling and improved readability.
-*   **Dynamic Ollama Integration**: Effortlessly manage and switch between various Ollama servers and their available language models directly from the intuitive frontend UI. This flexibility ensures optimal performance and model selection for diverse tasks.
+*   **Dynamic AI Server Integration**: Effortlessly manage and switch between various Ollama and Gemini servers and their available language models directly from the intuitive frontend UI. This flexibility ensures optimal performance and model selection for diverse tasks.
 *   **Asynchronous Background Processing**: Handles large-scale PDF processing tasks efficiently in the background, preventing timeouts and ensuring a smooth user experience.
 *   **Real-time Task Monitoring**: Keep track of all PDF processing tasks with real-time status updates.
 *   **Interactive Chatbot Interface**: Engage with a powerful language model through a user-friendly chat interface for quick queries and dynamic conversations.
@@ -34,6 +34,7 @@ Cerberus AI is a comprehensive full-stack application designed to empower users 
     *   Docker Compose - Tool for defining and running multi-container Docker applications.
 *   **Language Model Integration**:
     *   Ollama (external service) - Facilitates running large language models locally.
+    *   Gemini (external service) - Google's family of generative AI models.
     *   LangChain - Framework for developing applications powered by language models.
     *   Tavily Search API - For enhanced search capabilities in research and investigation modules.
 
@@ -43,8 +44,9 @@ Before you begin, ensure you have the following installed:
 
 *   **Docker**: [Install Docker](https://docs.docker.com/get-docker/)
 *   **Docker Compose**: Included with Docker Desktop. For Linux, [install separately](https://docs.docker.com/compose/install/linux/).
-*   **Ollama**: A running Ollama instance with your desired models pulled (e.g., `ollama pull gemma3:4b`). You will configure the Ollama server URL within the application's UI.
+*   **Ollama (Optional)**: A running Ollama instance with your desired models pulled (e.g., `ollama pull gemma3:4b`). You will configure the Ollama server URL within the application's UI.
     *   [Download Ollama](https://ollama.com/download)
+*   **Gemini API Key (Optional)**: A Google AI Gemini API key.
 
 ## Setup and Installation
 
@@ -65,12 +67,12 @@ Before you begin, ensure you have the following installed:
 1.  **Access the Application**:
     Open your web browser and navigate to `http://localhost:3500`.
 
-2.  **Configure Ollama Servers (First-time Setup)**:
+2.  **Configure AI Servers (First-time Setup)**:
     *   Click the gear icon (⚙️) in the sidebar.
-    *   Add a new Ollama server by providing a descriptive name (e.g., "My Local Ollama") and its URL (e.g., `http://host.docker.internal:11434` if Ollama is running on your host machine).
+    *   Add a new Ollama or Gemini server by providing a descriptive name and its URL or API key.
 
 3.  **Select Active Server and Model**:
-    *   Use the dropdown menus in the sidebar to select your active Ollama server and the specific model you wish to use for interactions.
+    *   Use the dropdown menus in the sidebar to select your active AI server and the specific model you wish to use for interactions.
 
 4.  **PDF Analysis (PDF Professor)**:
     *   Go to the "PDF Professor" section.
@@ -96,12 +98,16 @@ Before you begin, ensure you have the following installed:
 ## Troubleshooting Common Issues
 
 *   **`413 Request Entity Too Large`**: This error indicates that the uploaded file size exceeds the server's limit. To resolve this, increase the `client_max_body_size` in `frontend/nginx.conf` and then rebuild the frontend service: `docker-compose up -d --build frontend`.
-*   **Ollama Connectivity Problems**:
-    1.  Verify that your Ollama instance is running and accessible from your Docker environment.
-    2.  Ensure the Ollama server URL configured in the application's UI is correct (e.g., `http://host.docker.internal:11434` for a local Ollama instance on your host).
+*   **AI Server Connectivity Problems**:
+    1.  Verify that your Ollama or Gemini instance is running and accessible from your Docker environment.
+    2.  Ensure the AI server URL or API key configured in the application's UI is correct.
     3.  Check the backend service logs for connection errors: `docker-compose logs backend`.
     4.  If you have modified the database schema, you might need to recreate the database by running `docker-compose down -v && docker-compose up -d --build`. **Warning**: This action will permanently delete all existing data.
 *   **Containers Failing to Start**: Inspect the logs of the problematic service for detailed error messages: `docker-compose logs <service_name>`.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a pull request or open an issue to discuss your ideas.
 
 ## Stopping the Application
 

@@ -1,7 +1,7 @@
 import { Outlet } from "react-router-dom";
 import Sidebar from "./components/sidebar";
 import { useState, useEffect } from "react";
-import OllamaServerModal from "./components/OllamaServerModal";
+import AIServerModal from "./components/AIServerModal";
 import { getOllamaServers } from "./api/apiService";
 
 function App() {
@@ -45,7 +45,7 @@ function App() {
       <section className="flex-1 flex flex-col items-center min-w-0 overflow-auto p-5">
         <Outlet context={{ selectedOllamaServer, selectedModel }} />
       </section>
-      <OllamaServerModal 
+      <AIServerModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
         onServerSelected={handleServerSelected}

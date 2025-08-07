@@ -78,7 +78,7 @@ const StatusPage = () => {
                 <tr key={task.task_id} className="hover:bg-gray-700">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-400">{task.task_id}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{getStatusChip(task.status)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{task.ollama_server_name ? `${task.ollama_server_name} (${task.ollama_model || 'N/A'})` : (task.ollama_model || 'N/A')}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{task.server_name ? `${task.server_name} (${task.model_name || 'N/A'})` : (task.model_name || 'N/A')}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{task.processing_time_seconds +" sec" ?? 'N/A'}</td>
                   <td className="px-6 py-4 text-sm text-gray-200 prompt-cell max-w-[400px] max-h-[100px] overflow-ellipsis">{task.prompt}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{new Date(task.updated_at).toLocaleString()}</td>

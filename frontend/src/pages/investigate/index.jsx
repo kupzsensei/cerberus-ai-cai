@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { useOutletContext } from "react-router-dom";
 
 const InvestigatePage = () => {
-    const { selectedOllamaServer, selectedModel, handleModelChange } = useOutletContext();
+    const { selectedOllamaServer, selectedModel } = useOutletContext();
     const [query, setQuery] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [response, setResponse] = useState(null);
@@ -23,7 +23,7 @@ const InvestigatePage = () => {
         setError("");
 
         try {
-            const result = await investigate(query, selectedOllamaServer?.name, selectedModel);
+            const result = await investigate(query, selectedOllamaServer?.name, selectedModel, selectedOllamaServer?.type);
             console.log("API Result:", result);
             setResponse(result);
         } catch (err) {

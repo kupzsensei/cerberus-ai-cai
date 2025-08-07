@@ -2,20 +2,42 @@ import logo from "../assets/cerberus-logo.png";
 import { NavLink } from "react-router-dom";
 import { FaCog } from 'react-icons/fa'; // Import a gear icon
 import { useEffect, useState } from "react";
-import { getOllamaModels } from "../api/apiService";
+import { getOllamaModels, getExternalAIServers, getExternalAIModels, getOllamaServers } from "../api/apiService";
 
-export default function Sidebar({ ollamaServers, selectedOllamaServer, setSelectedOllamaServer, setIsModalOpen, selectedModel, setSelectedModel }) {
+export default function Sidebar({ selectedOllamaServer, setSelectedOllamaServer, setIsModalOpen, selectedModel, setSelectedModel }) {
+    const [allServers, setAllServers] = useState([]);
     const [models, setModels] = useState([]);
     const [isLoadingModels, setIsLoadingModels] = useState(false);
     const [modelError, setModelError] = useState(null);
 
+    const fetchServers = async () => {
+        const ollama = await getOllamaServers();
+        const external = await getExternalAIServers();
+        const all = [...ollama.map(s => ({...s, type: "ollama"})), ...external.map(s => ({...s, type: "gemini"}))];
+        setAllServers(all);
+        if (all.length > 0 && !selectedOllamaServer) {
+            setSelectedOllamaServer(all[0]);
+        }
+    };
+
     useEffect(() => {
+        fetchServers();
+    }, []);
+
+    useEffect(() => {
+        console.log("selectedOllamaServer changed:", selectedOllamaServer);
+        console.log("allServers:", allServers);
         const fetchModels = async () => {
             if (selectedOllamaServer) {
                 setIsLoadingModels(true);
                 setModelError(null);
                 try {
-                    const fetchedModels = await getOllamaModels(selectedOllamaServer.url);
+                    let fetchedModels = [];
+                    if (selectedOllamaServer.type === "ollama") {
+                        fetchedModels = await getOllamaModels(selectedOllamaServer.url);
+                    } else if (selectedOllamaServer.type === "gemini") {
+                        fetchedModels = await getExternalAIModels(selectedOllamaServer.type);
+                    }
                     setModels(fetchedModels);
                     if (fetchedModels.length > 0) {
                         setSelectedModel(fetchedModels[0]); // Select the first model by default
@@ -33,11 +55,11 @@ export default function Sidebar({ ollamaServers, selectedOllamaServer, setSelect
             }
         };
         fetchModels();
-    }, [selectedOllamaServer, setSelectedModel]);
+    }, [selectedOllamaServer, setSelectedModel, allServers]);
 
     const handleServerChange = (e) => {
         const serverName = e.target.value;
-        const server = ollamaServers.find(s => s.name === serverName);
+        const server = allServers.find(s => s.name === serverName);
         if (server) {
             setSelectedOllamaServer(server);
         }
@@ -61,7 +83,7 @@ export default function Sidebar({ ollamaServers, selectedOllamaServer, setSelect
                         Cerberus AI - Cai
                     </h1>
                     <p className="text-red-700 text-xs  drop-shadow-red-600 drop-shadow-md ">
-                         {selectedOllamaServer ? `${selectedOllamaServer.name} (${selectedOllamaServer.url})` : 'Ollama'}
+                         {selectedOllamaServer ? `${selectedOllamaServer.name} (${selectedOllamaServer.type})` : 'Ollama'}
                         <FaCog className="inline-block ml-2 cursor-pointer" onClick={() => {
                             console.log("Cog icon clicked, setting isModalOpen to true");
                             setIsModalOpen(true);
@@ -123,6 +145,21 @@ export default function Sidebar({ ollamaServers, selectedOllamaServer, setSelect
                         Investigation List
                     </NavLink>
                 </div>
+                <div class="flex flex-col">
+                     <span class="text-green-800 text-xs drop-shadow-green-600 drop-shadow-md border-green-500">
+                        LocalStorage
+                    </span>
+                    <NavLink to={'/local-storage'} className={({ isActive }) => isActive ?
+                        "text-green-500 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 border  hover:border p-2"
+                        : "text-green-700 hover:text-green-500 font-bold   drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2"}>
+                        My Files
+                    </NavLink>
+                    <NavLink to={'/local-storage/history'} className={({ isActive }) => isActive ?
+                        "text-green-500 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 border  hover:border p-2"
+                        : "text-green-700 hover:text-green-500 font-bold   drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2"}>
+                        Query History
+                    </NavLink>
+                </div>
                 <span className="text-green-800 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2">
                     Coming Soon...
                 </span>
@@ -134,12 +171,12 @@ export default function Sidebar({ ollamaServers, selectedOllamaServer, setSelect
                     current server
                 </p>
                 <select className="p-2 font-bold border-green-500 border" value={selectedOllamaServer?.name || ''} onChange={handleServerChange}>
-                    {ollamaServers.length === 0 ? (
+                    {allServers.length === 0 ? (
                         <option value="">No servers configured</option>
                     ) : (
-                        ollamaServers.map(server => (
+                        allServers.map(server => (
                             <option key={server.name} value={server.name}>
-                                {server.name}
+                                {server.name} ({server.type})
                             </option>
                         ))
                     )}
