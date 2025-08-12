@@ -505,9 +505,16 @@ async def process_local_storage_query(job_id: str, prompt: str, model_name: str,
             file_path = os.path.join(LOCAL_STORAGE_DIR, filename)
             with open(file_path, "rb") as f:
                 content = f.read()
-                # Here you might want to add more sophisticated content processing based on file type
-                combined_content += content.decode('utf-8', errors='ignore')
-                combined_content += "\n\n---\n\n"
+                # Force OCR on PDF bytes using utils.perform_ocr_on_pdf_bytes
+                extracted_text = utils.perform_ocr_on_pdf_bytes(content)
+                if extracted_text.startswith("[Error:"):
+                    logging.error(f"Error performing OCR on {filename}: {extracted_text}")
+                    # Decide how to handle: skip file, raise error, or include error message
+                    # For now, we'll include the error message in combined_content
+                    combined_content += f"[Error performing OCR on {filename}: {extracted_text}]\n\n---\n\n"
+                else:
+                    combined_content += extracted_text
+                    combined_content += "\n\n---\n\n"
 
         server_details = None
         if server_type == "ollama":
