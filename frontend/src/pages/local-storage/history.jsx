@@ -64,7 +64,6 @@ const LocalStorageHistoryPage = () => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Model</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Processing Time (s)</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Prompt</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Files</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Last Updated</th>
               <th className="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">Action</th>
@@ -78,9 +77,13 @@ const LocalStorageHistoryPage = () => {
                     <Link to={`/local-storage/result/${job.job_id}`}>{job.job_id}</Link>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{getStatusChip(job.status)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{job.server_name ? `${job.server_name} (${job.model_name || 'N/A'})` : (job.model_name || 'N/A')} ({job.server_type || 'N/A'})</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">
+                    {job.server_name && job.model_name 
+                      ? `${job.server_name} (${job.model_name})` 
+                      : (job.model_name || 'N/A')}
+                    {job.server_type && ` (${job.server_type})`}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{job.processing_time_seconds ? `${job.processing_time_seconds} sec` : 'N/A'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-200 prompt-cell max-w-[300px] overflow-ellipsis">{job.prompt}</td>
                   <td className="px-6 py-4 text-sm text-gray-200 prompt-cell max-w-[300px] overflow-ellipsis">{job.filenames.join(', ')}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{new Date(job.updated_at).toLocaleString()}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -105,7 +108,7 @@ const LocalStorageHistoryPage = () => {
               ))
             ) : (
               <tr>
-                <td colSpan="8" className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-400">
+                <td colSpan="7" className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-400">
                   No query history found.
                 </td>
               </tr>

@@ -395,7 +395,7 @@ async def query_local_storage_files(
     """Queries selected files in the local storage."""
     filenames_list = json.loads(filenames)
     job_id = str(uuid.uuid4())
-    await database.add_local_storage_job(job_id, prompt, model_name, server_name, filenames_list)
+    await database.add_local_storage_job(job_id, prompt, model_name, server_name, server_type, filenames_list)
     background_tasks.add_task(process_local_storage_query, job_id, prompt, model_name, server_name, server_type, filenames_list)
     return {"message": "Query started in the background.", "job_id": job_id}
 

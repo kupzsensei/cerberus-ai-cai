@@ -149,12 +149,12 @@ export default function Sidebar({ selectedOllamaServer, setSelectedOllamaServer,
                      <span class="text-green-800 text-xs drop-shadow-green-600 drop-shadow-md border-green-500">
                         LocalStorage
                     </span>
-                    <NavLink to={'/local-storage'} className={({ isActive }) => isActive ?
+                    <NavLink to={'/local-storage'} end className={({ isActive }) => isActive ?
                         "text-green-500 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 border  hover:border p-2"
                         : "text-green-700 hover:text-green-500 font-bold   drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2"}>
                         My Files
                     </NavLink>
-                    <NavLink to={'/local-storage/history'} className={({ isActive }) => isActive ?
+                    <NavLink to={'/local-storage/history'} end className={({ isActive }) => isActive ?
                         "text-green-500 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 border  hover:border p-2"
                         : "text-green-700 hover:text-green-500 font-bold   drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2"}>
                         Query History

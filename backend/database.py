@@ -248,8 +248,9 @@ async def initialize_local_storage_db():
                 job_id TEXT PRIMARY KEY,
                 status TEXT NOT NULL,
                 prompt TEXT,
-                ollama_model TEXT,
-                ollama_server_name TEXT,
+                model_name TEXT,
+                server_name TEXT,
+                server_type TEXT,
                 filenames TEXT,
                 result TEXT,
                 created_at TIMESTAMP NOT NULL,
@@ -259,7 +260,7 @@ async def initialize_local_storage_db():
         ''')
         await db.commit()
 
-async def add_local_storage_job(job_id: str, prompt: str, ollama_model: str, ollama_server_name: str, filenames: list):
+async def add_local_storage_job(job_id: str, prompt: str, model_name: str, server_name: str, server_type: str, filenames: list):
     """Adds a new local storage job."""
     now = datetime.now(ADELAIDE_TZ)
     filenames_json = json.dumps(filenames)
@@ -267,10 +268,10 @@ async def add_local_storage_job(job_id: str, prompt: str, ollama_model: str, oll
         await db.execute(
             """
             INSERT OR REPLACE INTO local_storage_jobs 
-            (job_id, status, prompt, ollama_model, ollama_server_name, filenames, result, created_at, updated_at, processing_time_seconds) 
-            VALUES (?, 'pending', ?, ?, ?, ?, NULL, ?, ?, NULL)
+            (job_id, status, prompt, model_name, server_name, server_type, filenames, result, created_at, updated_at, processing_time_seconds) 
+            VALUES (?, 'pending', ?, ?, ?, ?, ?, NULL, ?, ?, NULL)
             """,
-            (job_id, prompt, ollama_model, ollama_server_name, filenames_json, now, now)
+            (job_id, prompt, model_name, server_name, server_type, filenames_json, now, now)
         )
         await db.commit()
 
