@@ -162,6 +162,15 @@ export const deleteLocalStorageFile = async (filename) => {
   return response.data;
 };
 
+export const deleteMultipleLocalStorageFiles = async (filenames) => {
+  // Make multiple delete requests concurrently
+  const promises = filenames.map(filename => 
+    axios.delete(`${API_BASE_URL}/local-storage/files/${filename}`)
+  );
+  const responses = await Promise.all(promises);
+  return responses.map(response => response.data);
+};
+
 export const queryLocalStorageFiles = async (formData) => {
   const response = await axios.post(`${API_BASE_URL}/local-storage/query`, formData, {
     headers: { "Content-Type": "multipart/form-data" },

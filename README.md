@@ -13,6 +13,7 @@ Cerberus AI is a comprehensive full-stack application designed to empower users 
 *   **Threats and Risks Research**: A dedicated module for performing targeted cybersecurity threat and risk research based on specified date ranges, providing a structured overview of incidents.
 *   **Incident & Company Investigation**: Conduct in-depth investigations into specific cybersecurity incidents or gather comprehensive information about companies. The AI collates and summarizes findings from various sources.
 *   **Research & Investigation History**: Access and manage a detailed history of all past research queries and investigations, allowing for easy review and deletion of entries.
+*   **Enhanced Local File Storage**: Manage your files with an improved interface featuring group delete and download operations, and a streamlined file upload process through a dedicated modal.
 *   **Containerized Deployment**: Simplified setup and deployment across various environments using Docker and Docker Compose, ensuring consistency and portability.
 
 ## Technologies Utilized
@@ -94,6 +95,15 @@ Before you begin, ensure you have the following installed:
     *   The "Research List" page displays all past date-range based research queries.
     *   The "Investigation List" page shows all past incident/company investigations.
     *   You can view detailed results or delete entries from these lists.
+
+8.  **Local File Storage Management**:
+    *   Navigate to the \"My Files\" section in the LocalStorage menu.
+    *   Upload files using the \"Upload Files\" button which opens a dedicated modal with drag and drop functionality.
+    *   Select multiple files using checkboxes to perform group operations:
+        *   Delete multiple files at once
+        *   Download multiple files at once
+    *   View or download individual files using the action buttons on each file card.
+    *   Query selected files using the prompt area at the bottom of the page.
 
 ## Troubleshooting Common Issues
 
