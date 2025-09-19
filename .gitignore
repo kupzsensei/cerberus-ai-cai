@@ -1,5 +1,5 @@
 # Dependencies
-node_modules
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -166,7 +166,5 @@ Gemini_Security_and_Usage_Report.md
 **/*.pyc
 **/__pycache__/
 **/.DS_Store
-node_modules/
-.DS_Store
 */.DS_Store
 */.DS_Store?
