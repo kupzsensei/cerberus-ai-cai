@@ -14,6 +14,7 @@ import ThreatsAndRisksPage from "./pages/threats-and-risks";
 import LocalStoragePage from "./pages/local-storage/index.jsx";
 import LocalStorageResultPage from "./pages/local-storage/result.jsx";
 import LocalStorageHistoryPage from "./pages/local-storage/history.jsx";
+import EmailSchedulerPage from "./pages/email-scheduler/index.jsx";
 
 export const router = createBrowserRouter([
   {
@@ -72,6 +73,10 @@ export const router = createBrowserRouter([
       {
         path: "/local-storage/history",
         element: <LocalStorageHistoryPage />,
+      },
+      {
+        path: "/email-scheduler",
+        element: <EmailSchedulerPage />,
       },
     ],
   },

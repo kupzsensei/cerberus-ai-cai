@@ -4,15 +4,22 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# Copy package files
 COPY package*.json ./
-RUN npm install --force
+
+# Remove package-lock.json and node_modules if they exist, then install dependencies
+RUN rm -f package-lock.json && \
+    npm install --legacy-peer-deps && \
+    npm install esbuild@0.25.10 vite@5.4.10
+
+# Copy application code
 COPY . .
-# This build now correctly uses the relative paths from apiService.js
+
+# Build the application
 RUN npm run build
 
 # --- Stage 2: Serve the Application with Nginx ---
 FROM nginx:stable-alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
-# Copy our new proxy configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

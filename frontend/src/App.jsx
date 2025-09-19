@@ -42,7 +42,7 @@ function App() {
         selectedModel={selectedModel} // Pass selectedModel
         setSelectedModel={setSelectedModel} // Pass setSelectedModel
       />
-      <section className="flex-1 flex flex-col items-center min-w-0 overflow-auto p-5">
+      <section className="flex-1 flex flex-col items-center min-w-0 overflow-auto p-5 md:ml-0 mt-16 md:mt-0">
         <Outlet context={{ selectedOllamaServer, selectedModel }} />
       </section>
       <AIServerModal 

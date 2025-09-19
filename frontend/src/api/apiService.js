@@ -204,3 +204,109 @@ export const chatWithAI = async (messages, modelName, serverName, serverType) =>
   });
   return response.data;
 };
+
+// --- Email Scheduler API Functions ---
+
+export const getEmailConfigs = async () => {
+  const response = await axios.get(`${API_BASE_URL}/email-configs`);
+  return response.data.configs;
+};
+
+export const addEmailConfig = async (formData) => {
+  const response = await axios.post(`${API_BASE_URL}/email-config`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+export const updateEmailConfig = async (configId, formData) => {
+  const response = await axios.put(`${API_BASE_URL}/email-configs/${configId}`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+export const deleteEmailConfig = async (configId) => {
+  const response = await axios.delete(`${API_BASE_URL}/email-configs/${configId}`);
+  return response.data;
+};
+
+export const getEmailRecipientGroups = async () => {
+  const response = await axios.get(`${API_BASE_URL}/email-recipient-groups`);
+  return response.data.groups;
+};
+
+export const addEmailRecipientGroup = async (formData) => {
+  const response = await axios.post(`${API_BASE_URL}/email-recipient-groups`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+export const updateEmailRecipientGroup = async (groupId, formData) => {
+  const response = await axios.put(`${API_BASE_URL}/email-recipient-groups/${groupId}`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+export const deleteEmailRecipientGroup = async (groupId) => {
+  const response = await axios.delete(`${API_BASE_URL}/email-recipient-groups/${groupId}`);
+  return response.data;
+};
+
+export const getEmailRecipients = async (groupId) => {
+  const response = await axios.get(`${API_BASE_URL}/email-recipients/${groupId}`);
+  return response.data.recipients;
+};
+
+export const addEmailRecipient = async (formData) => {
+  const response = await axios.post(`${API_BASE_URL}/email-recipients`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+export const updateEmailRecipient = async (recipientId, formData) => {
+  const response = await axios.put(`${API_BASE_URL}/email-recipients/${recipientId}`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+export const deleteEmailRecipient = async (recipientId) => {
+  const response = await axios.delete(`${API_BASE_URL}/email-recipients/${recipientId}`);
+  return response.data;
+};
+
+export const getScheduledResearchList = async () => {
+  const response = await axios.get(`${API_BASE_URL}/scheduled-research`);
+  return response.data.scheduled_research;
+};
+
+export const addScheduledResearch = async (formData) => {
+  const response = await axios.post(`${API_BASE_URL}/scheduled-research`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+export const updateScheduledResearch = async (researchId, formData) => {
+  const response = await axios.put(`${API_BASE_URL}/scheduled-research/${researchId}`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+export const deleteScheduledResearch = async (researchId) => {
+  const response = await axios.delete(`${API_BASE_URL}/scheduled-research/${researchId}`);
+  return response.data;
+};
+
+export const getEmailDeliveryLogs = async (scheduledResearchId = null) => {
+  const url = scheduledResearchId 
+    ? `${API_BASE_URL}/email-delivery-logs?scheduled_research_id=${scheduledResearchId}`
+    : `${API_BASE_URL}/email-delivery-logs`;
+  const response = await axios.get(url);
+  return response.data.logs;
+};

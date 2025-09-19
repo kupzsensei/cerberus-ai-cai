@@ -260,6 +260,93 @@ async def initialize_local_storage_db():
         ''')
         await db.commit()
 
+async def initialize_email_scheduler_db():
+    """Initializes the database and creates tables for email scheduling functionality."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        # Email server configuration table
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS email_configs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                smtp_server TEXT NOT NULL,
+                smtp_port INTEGER NOT NULL,
+                username TEXT NOT NULL,
+                password TEXT NOT NULL,
+                sender_email TEXT NOT NULL,
+                sender_name TEXT,
+                use_tls BOOLEAN DEFAULT 1,
+                use_ssl BOOLEAN DEFAULT 0,
+                created_at TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP NOT NULL
+            )
+        ''')
+        
+        # Email recipient groups table
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS email_recipient_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT,
+                created_at TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP NOT NULL
+            )
+        ''')
+        
+        # Email recipients table
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS email_recipients (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                email TEXT NOT NULL,
+                name TEXT,
+                created_at TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP NOT NULL,
+                FOREIGN KEY (group_id) REFERENCES email_recipient_groups (id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Scheduled research table
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS scheduled_research (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT,
+                frequency TEXT NOT NULL,  -- daily, weekly, monthly
+                day_of_week INTEGER,      -- 0-6 (Monday-Sunday), NULL for daily
+                day_of_month INTEGER,     -- 1-31, NULL for daily/weekly
+                hour INTEGER NOT NULL,    -- 0-23
+                minute INTEGER NOT NULL,  -- 0-59
+                start_date TEXT,
+                end_date TEXT,
+                last_run TIMESTAMP,
+                next_run TIMESTAMP,
+                is_active BOOLEAN DEFAULT 1,
+                recipient_group_id INTEGER NOT NULL,
+                date_range_days INTEGER NOT NULL,  -- Number of days to look back
+                model_name TEXT,
+                server_name TEXT,
+                server_type TEXT,
+                created_at TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP NOT NULL,
+                FOREIGN KEY (recipient_group_id) REFERENCES email_recipient_groups (id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Email delivery logs table
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS email_delivery_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scheduled_research_id INTEGER NOT NULL,
+                subject TEXT,
+                recipients TEXT,  -- JSON array of emails
+                status TEXT NOT NULL,  -- sent, failed
+                error_message TEXT,
+                sent_at TIMESTAMP,
+                FOREIGN KEY (scheduled_research_id) REFERENCES scheduled_research (id) ON DELETE CASCADE
+            )
+        ''')
+        
+        await db.commit()
+
 async def add_local_storage_job(job_id: str, prompt: str, model_name: str, server_name: str, server_type: str, filenames: list):
     """Adds a new local storage job."""
     now = datetime.now(ADELAIDE_TZ)
@@ -344,3 +431,415 @@ async def initialize_external_ai_db():
             )
         ''')
         await db.commit()
+
+# --- Email Configuration Functions ---
+
+async def add_email_config(smtp_server: str, smtp_port: int, username: str, password: str, sender_email: str, sender_name: str = None, use_tls: bool = True, use_ssl: bool = False):
+    """Adds a new email configuration."""
+    now = datetime.now(ADELAIDE_TZ)
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute(
+            """
+            INSERT INTO email_configs 
+            (smtp_server, smtp_port, username, password, sender_email, sender_name, use_tls, use_ssl, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (smtp_server, smtp_port, username, password, sender_email, sender_name, use_tls, use_ssl, now, now)
+        )
+        await db.commit()
+
+async def get_email_configs():
+    """Retrieves all email configurations."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM email_configs ORDER BY created_at DESC") as cursor:
+            configs = await cursor.fetchall()
+            return [dict(row) for row in configs]
+
+async def get_email_config(config_id: int):
+    """Retrieves a single email configuration by ID."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM email_configs WHERE id = ?", (config_id,)) as cursor:
+            config = await cursor.fetchone()
+            if config:
+                return dict(config)
+            return None
+
+async def update_email_config(config_id: int, smtp_server: str = None, smtp_port: int = None, username: str = None, password: str = None, sender_email: str = None, sender_name: str = None, use_tls: bool = None, use_ssl: bool = None):
+    """Updates an email configuration."""
+    now = datetime.now(ADELAIDE_TZ)
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        # Build dynamic query based on provided fields
+        fields = []
+        values = []
+        
+        if smtp_server is not None:
+            fields.append("smtp_server = ?")
+            values.append(smtp_server)
+        if smtp_port is not None:
+            fields.append("smtp_port = ?")
+            values.append(smtp_port)
+        if username is not None:
+            fields.append("username = ?")
+            values.append(username)
+        if password is not None:
+            fields.append("password = ?")
+            values.append(password)
+        if sender_email is not None:
+            fields.append("sender_email = ?")
+            values.append(sender_email)
+        if sender_name is not None:
+            fields.append("sender_name = ?")
+            values.append(sender_name)
+        if use_tls is not None:
+            fields.append("use_tls = ?")
+            values.append(use_tls)
+        if use_ssl is not None:
+            fields.append("use_ssl = ?")
+            values.append(use_ssl)
+            
+        if fields:
+            query = f"UPDATE email_configs SET {', '.join(fields)}, updated_at = ? WHERE id = ?"
+            values.extend([now, config_id])
+            await db.execute(query, values)
+            await db.commit()
+
+async def delete_email_config(config_id: int):
+    """Deletes an email configuration."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute("DELETE FROM email_configs WHERE id = ?", (config_id,))
+        await db.commit()
+
+# --- Email Recipient Group Functions ---
+
+async def add_email_recipient_group(name: str, description: str = None):
+    """Adds a new email recipient group."""
+    now = datetime.now(ADELAIDE_TZ)
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute(
+            """
+            INSERT INTO email_recipient_groups (name, description, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (name, description, now, now)
+        )
+        await db.commit()
+
+async def get_email_recipient_groups():
+    """Retrieves all email recipient groups."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM email_recipient_groups ORDER BY name") as cursor:
+            groups = await cursor.fetchall()
+            return [dict(row) for row in groups]
+
+async def get_email_recipient_group(group_id: int):
+    """Retrieves a single email recipient group by ID."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM email_recipient_groups WHERE id = ?", (group_id,)) as cursor:
+            group = await cursor.fetchone()
+            if group:
+                return dict(group)
+            return None
+
+async def update_email_recipient_group(group_id: int, name: str = None, description: str = None):
+    """Updates an email recipient group."""
+    now = datetime.now(ADELAIDE_TZ)
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        # Build dynamic query based on provided fields
+        fields = []
+        values = []
+        
+        if name is not None:
+            fields.append("name = ?")
+            values.append(name)
+        if description is not None:
+            fields.append("description = ?")
+            values.append(description)
+            
+        if fields:
+            query = f"UPDATE email_recipient_groups SET {', '.join(fields)}, updated_at = ? WHERE id = ?"
+            values.extend([now, group_id])
+            await db.execute(query, values)
+            await db.commit()
+
+async def delete_email_recipient_group(group_id: int):
+    """Deletes an email recipient group."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute("DELETE FROM email_recipient_groups WHERE id = ?", (group_id,))
+        await db.commit()
+
+# --- Email Recipient Functions ---
+
+async def add_email_recipient(group_id: int, email: str, name: str = None):
+    """Adds a new email recipient to a group."""
+    now = datetime.now(ADELAIDE_TZ)
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute(
+            """
+            INSERT INTO email_recipients (group_id, email, name, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (group_id, email, name, now, now)
+        )
+        await db.commit()
+
+async def get_email_recipients(group_id: int):
+    """Retrieves all email recipients for a group."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM email_recipients WHERE group_id = ? ORDER BY email", (group_id,)) as cursor:
+            recipients = await cursor.fetchall()
+            return [dict(row) for row in recipients]
+
+async def get_email_recipient(recipient_id: int):
+    """Retrieves a single email recipient by ID."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM email_recipients WHERE id = ?", (recipient_id,)) as cursor:
+            recipient = await cursor.fetchone()
+            if recipient:
+                return dict(recipient)
+            return None
+
+async def update_email_recipient(recipient_id: int, email: str = None, name: str = None):
+    """Updates an email recipient."""
+    now = datetime.now(ADELAIDE_TZ)
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        # Build dynamic query based on provided fields
+        fields = []
+        values = []
+        
+        if email is not None:
+            fields.append("email = ?")
+            values.append(email)
+        if name is not None:
+            fields.append("name = ?")
+            values.append(name)
+            
+        if fields:
+            query = f"UPDATE email_recipients SET {', '.join(fields)}, updated_at = ? WHERE id = ?"
+            values.extend([now, recipient_id])
+            await db.execute(query, values)
+            await db.commit()
+
+async def delete_email_recipient(recipient_id: int):
+    """Deletes an email recipient."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute("DELETE FROM email_recipients WHERE id = ?", (recipient_id,))
+        await db.commit()
+
+# --- Scheduled Research Functions ---
+
+async def add_scheduled_research(
+    name: str, 
+    frequency: str, 
+    hour: int, 
+    minute: int, 
+    recipient_group_id: int, 
+    date_range_days: int,
+    description: str = None,
+    day_of_week: int = None,
+    day_of_month: int = None,
+    start_date: str = None,
+    end_date: str = None,
+    model_name: str = None,
+    server_name: str = None,
+    server_type: str = None
+):
+    """Adds a new scheduled research configuration."""
+    now = datetime.now(ADELAIDE_TZ)
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute(
+            """
+            INSERT INTO scheduled_research 
+            (name, description, frequency, day_of_week, day_of_month, hour, minute, start_date, end_date,
+             recipient_group_id, date_range_days, model_name, server_name, server_type,
+             created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (name, description, frequency, day_of_week, day_of_month, hour, minute, start_date, end_date,
+             recipient_group_id, date_range_days, model_name, server_name, server_type, now, now)
+        )
+        await db.commit()
+
+async def get_scheduled_research_list():
+    """Retrieves all scheduled research configurations."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT sr.*, erg.name as recipient_group_name
+            FROM scheduled_research sr
+            LEFT JOIN email_recipient_groups erg ON sr.recipient_group_id = erg.id
+            ORDER BY sr.created_at DESC
+        """) as cursor:
+            research_list = await cursor.fetchall()
+            return [dict(row) for row in research_list]
+
+async def get_scheduled_research(research_id: int):
+    """Retrieves a single scheduled research configuration by ID."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT sr.*, erg.name as recipient_group_name
+            FROM scheduled_research sr
+            LEFT JOIN email_recipient_groups erg ON sr.recipient_group_id = erg.id
+            WHERE sr.id = ?
+        """, (research_id,)) as cursor:
+            research = await cursor.fetchone()
+            if research:
+                return dict(research)
+            return None
+
+async def update_scheduled_research(
+    research_id: int,
+    name: str = None,
+    description: str = None,
+    frequency: str = None,
+    day_of_week: int = None,
+    day_of_month: int = None,
+    hour: int = None,
+    minute: int = None,
+    start_date: str = None,
+    end_date: str = None,
+    is_active: bool = None,
+    recipient_group_id: int = None,
+    date_range_days: int = None,
+    model_name: str = None,
+    server_name: str = None,
+    server_type: str = None
+):
+    """Updates a scheduled research configuration."""
+    now = datetime.now(ADELAIDE_TZ)
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        # Build dynamic query based on provided fields
+        fields = []
+        values = []
+        
+        if name is not None:
+            fields.append("name = ?")
+            values.append(name)
+        if description is not None:
+            fields.append("description = ?")
+            values.append(description)
+        if frequency is not None:
+            fields.append("frequency = ?")
+            values.append(frequency)
+        if day_of_week is not None:
+            fields.append("day_of_week = ?")
+            values.append(day_of_week)
+        if day_of_month is not None:
+            fields.append("day_of_month = ?")
+            values.append(day_of_month)
+        if hour is not None:
+            fields.append("hour = ?")
+            values.append(hour)
+        if minute is not None:
+            fields.append("minute = ?")
+            values.append(minute)
+        if start_date is not None:
+            fields.append("start_date = ?")
+            values.append(start_date)
+        if end_date is not None:
+            fields.append("end_date = ?")
+            values.append(end_date)
+        if is_active is not None:
+            fields.append("is_active = ?")
+            values.append(is_active)
+        if recipient_group_id is not None:
+            fields.append("recipient_group_id = ?")
+            values.append(recipient_group_id)
+        if date_range_days is not None:
+            fields.append("date_range_days = ?")
+            values.append(date_range_days)
+        if model_name is not None:
+            fields.append("model_name = ?")
+            values.append(model_name)
+        if server_name is not None:
+            fields.append("server_name = ?")
+            values.append(server_name)
+        if server_type is not None:
+            fields.append("server_type = ?")
+            values.append(server_type)
+            
+        if fields:
+            query = f"UPDATE scheduled_research SET {', '.join(fields)}, updated_at = ? WHERE id = ?"
+            values.extend([now, research_id])
+            await db.execute(query, values)
+            await db.commit()
+
+async def delete_scheduled_research(research_id: int):
+    """Deletes a scheduled research configuration."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute("DELETE FROM scheduled_research WHERE id = ?", (research_id,))
+        await db.commit()
+
+async def update_scheduled_research_run_times(research_id: int, last_run: datetime = None, next_run: datetime = None):
+    """Updates the last run and next run times for a scheduled research."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        fields = []
+        values = []
+        
+        if last_run is not None:
+            fields.append("last_run = ?")
+            values.append(last_run)
+        if next_run is not None:
+            fields.append("next_run = ?")
+            values.append(next_run)
+            
+        if fields:
+            query = f"UPDATE scheduled_research SET {', '.join(fields)} WHERE id = ?"
+            values.append(research_id)
+            await db.execute(query, values)
+            await db.commit()
+
+# --- Email Delivery Log Functions ---
+
+async def add_email_delivery_log(
+    scheduled_research_id: int,
+    subject: str,
+    recipients: list,
+    status: str,
+    sent_at: datetime = None,
+    error_message: str = None
+):
+    """Adds a new email delivery log entry."""
+    recipients_json = json.dumps(recipients)
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute(
+            """
+            INSERT INTO email_delivery_logs 
+            (scheduled_research_id, subject, recipients, status, error_message, sent_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (scheduled_research_id, subject, recipients_json, status, error_message, sent_at)
+        )
+        await db.commit()
+
+async def get_email_delivery_logs(scheduled_research_id: int = None, limit: int = 50):
+    """Retrieves email delivery logs, optionally filtered by scheduled research ID."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        if scheduled_research_id:
+            query = """
+                SELECT * FROM email_delivery_logs 
+                WHERE scheduled_research_id = ? 
+                ORDER BY sent_at DESC 
+                LIMIT ?
+            """
+            params = (scheduled_research_id, limit)
+        else:
+            query = "SELECT * FROM email_delivery_logs ORDER BY sent_at DESC LIMIT ?"
+            params = (limit,)
+            
+        async with db.execute(query, params) as cursor:
+            logs = await cursor.fetchall()
+            result = []
+            for log in logs:
+                log_dict = dict(log)
+                if log_dict.get('recipients'):
+                    log_dict['recipients'] = json.loads(log_dict['recipients'])
+                result.append(log_dict)
+            return result

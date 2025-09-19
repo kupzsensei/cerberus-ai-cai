@@ -100,14 +100,10 @@ __pycache__/
 *.pyd
 .Python
 .pytest_cache/
-.pytest_cache
 .coverage
-.gitignore
-.pytest_cache/
 env/
 venv/
 .venv/
-.venv
 
 # Database
 *.db
@@ -165,3 +161,12 @@ coderabbit_script_output.txt
 
 # Security report
 Gemini_Security_and_Usage_Report.md
+
+# Additional ignores
+**/*.pyc
+**/__pycache__/
+**/.DS_Store
+node_modules/
+.DS_Store
+*/.DS_Store
+*/.DS_Store?

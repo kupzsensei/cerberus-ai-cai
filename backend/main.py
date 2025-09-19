@@ -14,6 +14,7 @@ from typing import List
 import utils
 import database
 import research
+import scheduler_service
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -36,17 +37,23 @@ client = httpx.AsyncClient()
 
 @app.on_event("startup")
 async def startup_event():
-    """On startup, configure and initialize the database."""
+    """On startup, configure and initialize the database and start the scheduler."""
     db_file = utils.config.get("database_file", "tasks.db")
     database.configure_database(db_file)
     await database.initialize_db()
     await database.initialize_research_db()
     await database.initialize_local_storage_db()
+    await database.initialize_email_scheduler_db()
+    
+    # Start the scheduled research executor
+    import asyncio
+    asyncio.create_task(scheduler_service.scheduler_executor.run_scheduler())
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """On shutdown, close the httpx client."""
+    """On shutdown, close the httpx client and stop the scheduler."""
     await client.aclose()
+    scheduler_service.scheduler_executor.stop_scheduler()
 
 async def process_and_update_task(file_name: str, user_prompt: str, model_name: str, server_name: str, server_type: str):
     """
@@ -541,3 +548,277 @@ async def process_local_storage_query(job_id: str, prompt: str, model_name: str,
         logging.error(f"Background task failed for job {job_id}. Error: {e}", exc_info=True)
         error_data = {"error": str(e)}
         await database.update_local_storage_job(job_id, 'failed', result=error_data, processing_time=duration)
+
+# --- Email Scheduler Endpoints ---
+
+@app.post("/email-config", status_code=201)
+async def add_email_config_endpoint(
+    smtp_server: str = Form(...),
+    smtp_port: int = Form(...),
+    username: str = Form(...),
+    password: str = Form(...),
+    sender_email: str = Form(...),
+    sender_name: str = Form(None),
+    use_tls: bool = Form(True),
+    use_ssl: bool = Form(False)
+):
+    """Adds a new email configuration."""
+    await database.add_email_config(smtp_server, smtp_port, username, password, sender_email, sender_name, use_tls, use_ssl)
+    return {"message": "Email configuration added successfully."}
+
+@app.get("/email-configs")
+async def get_email_configs_endpoint():
+    """Retrieves all email configurations."""
+    configs = await database.get_email_configs()
+    return {"configs": configs}
+
+@app.get("/email-configs/{config_id}")
+async def get_email_config_endpoint(config_id: int):
+    """Retrieves a single email configuration by ID."""
+    config = await database.get_email_config(config_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Email configuration not found.")
+    return config
+
+@app.put("/email-configs/{config_id}")
+async def update_email_config_endpoint(
+    config_id: int,
+    smtp_server: str = Form(None),
+    smtp_port: int = Form(None),
+    username: str = Form(None),
+    password: str = Form(None),
+    sender_email: str = Form(None),
+    sender_name: str = Form(None),
+    use_tls: bool = Form(None),
+    use_ssl: bool = Form(None)
+):
+    """Updates an email configuration."""
+    config = await database.get_email_config(config_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Email configuration not found.")
+    
+    await database.update_email_config(config_id, smtp_server, smtp_port, username, password, sender_email, sender_name, use_tls, use_ssl)
+    return {"message": "Email configuration updated successfully."}
+
+@app.delete("/email-configs/{config_id}", status_code=200)
+async def delete_email_config_endpoint(config_id: int):
+    """Deletes an email configuration."""
+    config = await database.get_email_config(config_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Email configuration not found.")
+    
+    await database.delete_email_config(config_id)
+    return {"message": "Email configuration deleted successfully."}
+
+# --- Email Recipient Group Endpoints ---
+
+@app.post("/email-recipient-groups", status_code=201)
+async def add_email_recipient_group_endpoint(name: str = Form(...), description: str = Form(None)):
+    """Adds a new email recipient group."""
+    # Check if group with this name already exists
+    groups = await database.get_email_recipient_groups()
+    if any(group['name'].lower() == name.lower() for group in groups):
+        raise HTTPException(status_code=400, detail="A group with this name already exists.")
+    
+    await database.add_email_recipient_group(name, description)
+    return {"message": "Email recipient group added successfully."}
+
+@app.get("/email-recipient-groups")
+async def get_email_recipient_groups_endpoint():
+    """Retrieves all email recipient groups."""
+    groups = await database.get_email_recipient_groups()
+    return {"groups": groups}
+
+@app.get("/email-recipient-groups/{group_id}")
+async def get_email_recipient_group_endpoint(group_id: int):
+    """Retrieves a single email recipient group by ID."""
+    group = await database.get_email_recipient_group(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Email recipient group not found.")
+    return group
+
+@app.put("/email-recipient-groups/{group_id}")
+async def update_email_recipient_group_endpoint(group_id: int, name: str = Form(None), description: str = Form(None)):
+    """Updates an email recipient group."""
+    group = await database.get_email_recipient_group(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Email recipient group not found.")
+    
+    await database.update_email_recipient_group(group_id, name, description)
+    return {"message": "Email recipient group updated successfully."}
+
+@app.delete("/email-recipient-groups/{group_id}", status_code=200)
+async def delete_email_recipient_group_endpoint(group_id: int):
+    """Deletes an email recipient group."""
+    group = await database.get_email_recipient_group(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Email recipient group not found.")
+    
+    await database.delete_email_recipient_group(group_id)
+    return {"message": "Email recipient group deleted successfully."}
+
+# --- Email Recipient Endpoints ---
+
+@app.post("/email-recipients", status_code=201)
+async def add_email_recipient_endpoint(group_id: int = Form(...), email: str = Form(...), name: str = Form(None)):
+    """Adds a new email recipient to a group."""
+    # Check if group exists
+    group = await database.get_email_recipient_group(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Email recipient group not found.")
+    
+    await database.add_email_recipient(group_id, email, name)
+    return {"message": "Email recipient added successfully."}
+
+@app.get("/email-recipients/{group_id}")
+async def get_email_recipients_endpoint(group_id: int):
+    """Retrieves all email recipients for a group."""
+    # Check if group exists
+    group = await database.get_email_recipient_group(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Email recipient group not found.")
+    
+    recipients = await database.get_email_recipients(group_id)
+    return {"recipients": recipients}
+
+@app.get("/email-recipient/{recipient_id}")
+async def get_email_recipient_endpoint(recipient_id: int):
+    """Retrieves a single email recipient by ID."""
+    recipient = await database.get_email_recipient(recipient_id)
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Email recipient not found.")
+    return recipient
+
+@app.put("/email-recipients/{recipient_id}")
+async def update_email_recipient_endpoint(recipient_id: int, email: str = Form(None), name: str = Form(None)):
+    """Updates an email recipient."""
+    recipient = await database.get_email_recipient(recipient_id)
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Email recipient not found.")
+    
+    await database.update_email_recipient(recipient_id, email, name)
+    return {"message": "Email recipient updated successfully."}
+
+@app.delete("/email-recipients/{recipient_id}", status_code=200)
+async def delete_email_recipient_endpoint(recipient_id: int):
+    """Deletes an email recipient."""
+    recipient = await database.get_email_recipient(recipient_id)
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Email recipient not found.")
+    
+    await database.delete_email_recipient(recipient_id)
+    return {"message": "Email recipient deleted successfully."}
+
+# --- Scheduled Research Endpoints ---
+
+@app.post("/scheduled-research", status_code=201)
+async def add_scheduled_research_endpoint(
+    name: str = Form(...),
+    frequency: str = Form(...),  # daily, weekly, monthly
+    hour: int = Form(...),
+    minute: int = Form(...),
+    recipient_group_id: int = Form(...),
+    date_range_days: int = Form(...),
+    description: str = Form(None),
+    day_of_week: int = Form(None),  # 0-6 (Monday-Sunday), required for weekly
+    day_of_month: int = Form(None),  # 1-31, required for monthly
+    start_date: str = Form(None),
+    end_date: str = Form(None),
+    model_name: str = Form(None),
+    server_name: str = Form(None),
+    server_type: str = Form(None)
+):
+    """Adds a new scheduled research configuration."""
+    # Validate frequency and required fields
+    if frequency == "weekly" and day_of_week is None:
+        raise HTTPException(status_code=400, detail="day_of_week is required for weekly frequency.")
+    if frequency == "monthly" and day_of_month is None:
+        raise HTTPException(status_code=400, detail="day_of_month is required for monthly frequency.")
+    
+    # Check if recipient group exists
+    group = await database.get_email_recipient_group(recipient_group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Email recipient group not found.")
+    
+    await database.add_scheduled_research(
+        name, frequency, hour, minute, recipient_group_id, date_range_days,
+        description, day_of_week, day_of_month, start_date, end_date,
+        model_name, server_name, server_type
+    )
+    return {"message": "Scheduled research configuration added successfully."}
+
+@app.get("/scheduled-research")
+async def get_scheduled_research_list_endpoint():
+    """Retrieves all scheduled research configurations."""
+    research_list = await database.get_scheduled_research_list()
+    return {"scheduled_research": research_list}
+
+@app.get("/scheduled-research/{research_id}")
+async def get_scheduled_research_endpoint(research_id: int):
+    """Retrieves a single scheduled research configuration by ID."""
+    research = await database.get_scheduled_research(research_id)
+    if not research:
+        raise HTTPException(status_code=404, detail="Scheduled research configuration not found.")
+    return research
+
+@app.put("/scheduled-research/{research_id}")
+async def update_scheduled_research_endpoint(
+    research_id: int,
+    name: str = Form(None),
+    description: str = Form(None),
+    frequency: str = Form(None),
+    day_of_week: int = Form(None),
+    day_of_month: int = Form(None),
+    hour: int = Form(None),
+    minute: int = Form(None),
+    start_date: str = Form(None),
+    end_date: str = Form(None),
+    is_active: bool = Form(None),
+    recipient_group_id: int = Form(None),
+    date_range_days: int = Form(None),
+    model_name: str = Form(None),
+    server_name: str = Form(None),
+    server_type: str = Form(None)
+):
+    """Updates a scheduled research configuration."""
+    research = await database.get_scheduled_research(research_id)
+    if not research:
+        raise HTTPException(status_code=404, detail="Scheduled research configuration not found.")
+    
+    # Validate frequency and required fields if they are being updated
+    if frequency is not None:
+        if frequency == "weekly" and day_of_week is None and research.get('day_of_week') is None:
+            raise HTTPException(status_code=400, detail="day_of_week is required for weekly frequency.")
+        if frequency == "monthly" and day_of_month is None and research.get('day_of_month') is None:
+            raise HTTPException(status_code=400, detail="day_of_month is required for monthly frequency.")
+    
+    # Check if recipient group exists (if being updated)
+    if recipient_group_id is not None:
+        group = await database.get_email_recipient_group(recipient_group_id)
+        if not group:
+            raise HTTPException(status_code=404, detail="Email recipient group not found.")
+    
+    await database.update_scheduled_research(
+        research_id, name, description, frequency, day_of_week, day_of_month,
+        hour, minute, start_date, end_date, is_active, recipient_group_id,
+        date_range_days, model_name, server_name, server_type
+    )
+    return {"message": "Scheduled research configuration updated successfully."}
+
+@app.delete("/scheduled-research/{research_id}", status_code=200)
+async def delete_scheduled_research_endpoint(research_id: int):
+    """Deletes a scheduled research configuration."""
+    research = await database.get_scheduled_research(research_id)
+    if not research:
+        raise HTTPException(status_code=404, detail="Scheduled research configuration not found.")
+    
+    await database.delete_scheduled_research(research_id)
+    return {"message": "Scheduled research configuration deleted successfully."}
+
+# --- Email Delivery Log Endpoints ---
+
+@app.get("/email-delivery-logs")
+async def get_email_delivery_logs_endpoint(scheduled_research_id: int = None):
+    """Retrieves email delivery logs."""
+    logs = await database.get_email_delivery_logs(scheduled_research_id)
+    return {"logs": logs}
