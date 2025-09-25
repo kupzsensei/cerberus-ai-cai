@@ -4,6 +4,7 @@ import EmailConfigSection from "./EmailConfigSection";
 import RecipientGroupSection from "./RecipientGroupSection";
 import ScheduledResearchSection from "./ScheduledResearchSection";
 import EmailDeliveryLogsSection from "./EmailDeliveryLogsSection";
+import TestSection from "./TestSection";
 
 const EmailSchedulerPage = () => {
   const [activeTab, setActiveTab] = useState("scheduled-research");
@@ -38,7 +39,7 @@ const EmailSchedulerPage = () => {
       <p className="mb-5">Configure automated threat research reports to be sent via email.</p>
 
       {/* Tab Navigation */}
-      <div className="flex border-b border-green-500 mb-5">
+      <div className="flex border-b border-green-500 mb-5 flex-wrap">
         <button
           className={`py-2 px-4 font-semibold ${activeTab === "scheduled-research" ? "text-green-500 border-b-2 border-green-500" : "text-green-700 hover:text-green-500"}`}
           onClick={() => setActiveTab("scheduled-research")}
@@ -56,6 +57,12 @@ const EmailSchedulerPage = () => {
           onClick={() => setActiveTab("recipient-groups")}
         >
           Recipient Groups
+        </button>
+        <button
+          className={`py-2 px-4 font-semibold ${activeTab === "test" ? "text-green-500 border-b-2 border-green-500" : "text-green-700 hover:text-green-500"}`}
+          onClick={() => setActiveTab("test")}
+        >
+          Test Configuration
         </button>
         <button
           className={`py-2 px-4 font-semibold ${activeTab === "delivery-logs" ? "text-green-500 border-b-2 border-green-500" : "text-green-700 hover:text-green-500"}`}
@@ -95,6 +102,10 @@ const EmailSchedulerPage = () => {
             scheduledResearch={scheduledResearch}
             onRefresh={refreshData}
           />
+        )}
+        
+        {activeTab === "test" && (
+          <TestSection />
         )}
       </div>
     </div>

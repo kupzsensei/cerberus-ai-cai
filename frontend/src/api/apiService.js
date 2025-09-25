@@ -303,6 +303,21 @@ export const deleteScheduledResearch = async (researchId) => {
   return response.data;
 };
 
+export const testEmailConfig = async (formData) => {
+  const response = await axios.post(`${API_BASE_URL}/test-email`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+// Test scheduled research immediately
+export const testScheduledResearch = async (formData) => {
+  const response = await axios.post(`${API_BASE_URL}/test-scheduled-research`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
 export const getEmailDeliveryLogs = async (scheduledResearchId = null) => {
   const url = scheduledResearchId 
     ? `${API_BASE_URL}/email-delivery-logs?scheduled_research_id=${scheduledResearchId}`

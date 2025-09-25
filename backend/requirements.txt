@@ -62,3 +62,4 @@ langgraph
 uuid==1.30
 langchain-google-genai
 apscheduler==3.10.4
+mdit-py-plugins==0.4.2

@@ -85,28 +85,6 @@ class ScheduledResearchExecutor:
         if not research_config.get('is_active', True):
             return False
             
-        # Check if we have a last run time
-        last_run = research_config.get('last_run')
-        if last_run:
-            # Parse the last run time
-            if isinstance(last_run, str):
-                last_run = datetime.fromisoformat(last_run.replace('Z', '+00:00'))
-            
-            # Check if enough time has passed since last run
-            now = datetime.now(ADELAIDE_TZ)
-            if research_config['frequency'] == 'daily':
-                # Should run if last run was more than 23 hours ago
-                if (now - last_run).total_seconds() < 23 * 3600:
-                    return False
-            elif research_config['frequency'] == 'weekly':
-                # Should run if last run was more than 6 days ago
-                if (now - last_run).total_seconds() < 6 * 24 * 3600:
-                    return False
-            elif research_config['frequency'] == 'monthly':
-                # Should run if last run was more than 27 days ago
-                if (now - last_run).total_seconds() < 27 * 24 * 3600:
-                    return False
-        
         # Check if it's the right time of day
         now = datetime.now(ADELAIDE_TZ)
         if now.hour != research_config['hour'] or now.minute != research_config['minute']:
@@ -122,6 +100,47 @@ class ScheduledResearchExecutor:
             if now.day != research_config['day_of_month']:
                 return False
                 
+        # Check if we have a last run time
+        last_run = research_config.get('last_run')
+        if last_run:
+            # Parse the last run time
+            if isinstance(last_run, str):
+                last_run = datetime.fromisoformat(last_run.replace('Z', '+00:00'))
+            
+            # Check if it's the same day as last run
+            if last_run.date() == now.date():
+                # If it's the same day, check if the task was updated after the last run
+                # This allows updated tasks to run again on the same day
+                updated_at = research_config.get('updated_at')
+                if updated_at:
+                    # Parse the updated time
+                    if isinstance(updated_at, str):
+                        updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+                    
+                    # If the task was updated after it last ran, allow it to run again today
+                    if updated_at > last_run:
+                        return True
+                    else:
+                        # Already ran today and wasn't updated after last run
+                        return False
+                else:
+                    # No updated_at field, so don't run again today
+                    return False
+            
+            # For different days, check frequency-based thresholds
+            if research_config['frequency'] == 'daily':
+                # Daily tasks can run once per day
+                if (now - last_run).total_seconds() < 23 * 3600:
+                    return False
+            elif research_config['frequency'] == 'weekly':
+                # Weekly tasks can run once per week
+                if (now - last_run).total_seconds() < 6 * 24 * 3600:
+                    return False
+            elif research_config['frequency'] == 'monthly':
+                # Monthly tasks can run once per month
+                if (now - last_run).total_seconds() < 27 * 24 * 3600:
+                    return False
+        
         return True
     
     async def execute_scheduled_research(self, research_config: dict):
@@ -168,8 +187,9 @@ class ScheduledResearchExecutor:
             )
             
             if result:
-                # Send email with results
-                success = await email_service.send_scheduled_research_email(research_config, result)
+                # Send email with results and email_config_id if provided
+                email_config_id = research_config.get('email_config_id')
+                success = await email_service.send_scheduled_research_email(research_config, result, None, email_config_id)
                 if success:
                     logger.info(f"Successfully sent research report for: {research_config['name']}")
                 else:

@@ -10,6 +10,9 @@ import pytz
 from typing import List
 import database
 import aiosqlite
+from markdown_it import MarkdownIt
+from mdit_py_plugins.front_matter import front_matter_plugin
+from mdit_py_plugins.footnote import footnote_plugin
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +24,14 @@ ADELAIDE_TZ = pytz.timezone('Australia/Adelaide')
 # before storage in the database and decrypted when needed. This implementation
 # stores credentials in plaintext for simplicity, but production deployments should
 # implement proper encryption mechanisms.
+
+async def get_specific_email_config(config_id: int):
+    """Get a specific email configuration by ID from the database."""
+    configs = await database.get_email_configs()
+    for config in configs:
+        if config['id'] == config_id:
+            return config
+    return None
 
 async def get_active_email_config():
     """Get the active email configuration from the database."""
@@ -91,49 +102,74 @@ def send_email_with_config(config: dict, recipients: List[str], subject: str, bo
         logger.error(f"Failed to send email: {str(e)}")
         return False
 
-async def send_scheduled_research_email(research_config: dict, research_result: str):
+async def send_scheduled_research_email(research_config: dict, research_result: str, test_email: str = None, email_config_id: int = None):
     """
     Send scheduled research results via email.
     
     Args:
         research_config: Scheduled research configuration
         research_result: The research result content to send
+        test_email: Optional email address to send to instead of the group
+        email_config_id: Optional specific email configuration ID to use
     
     Returns:
         bool: True if successful, False otherwise
     """
     try:
         # Get email configuration
-        email_config = await get_active_email_config()
+        email_config = None
+        
+        # If a specific email config ID is provided, use it
+        if email_config_id:
+            email_config = await get_specific_email_config(email_config_id)
+        else:
+            # Otherwise, use the active/default email configuration
+            email_config = await get_active_email_config()
         if not email_config:
             logger.error("No email configuration found")
             return False
         
         # Get recipient group and recipients
-        recipient_group_id = research_config['recipient_group_id']
-        recipients = await database.get_email_recipients(recipient_group_id)
-        if not recipients:
-            logger.warning(f"No recipients found for group ID {recipient_group_id}")
-            return False
+        recipient_emails = []
         
-        # Extract email addresses
-        recipient_emails = [recipient['email'] for recipient in recipients]
+        # If test_email is provided, use it instead of the group
+        if test_email:
+            recipient_emails = [test_email]
+        else:
+            # If no test_email, we must have a recipient group
+            recipient_group_id = research_config.get('recipient_group_id')
+            if not recipient_group_id:
+                logger.error("No recipient group ID provided and no test email specified")
+                return False
+                
+            recipients = await database.get_email_recipients(recipient_group_id)
+            if not recipients:
+                logger.warning(f"No recipients found for group ID {recipient_group_id}")
+                return False
+            
+            # Extract email addresses
+            recipient_emails = [recipient['email'] for recipient in recipients]
         
         # Create email content
         subject = f"Scheduled Threat Research Report: {research_config['name']}"
         
+        # Convert markdown to HTML
+        md = MarkdownIt("commonmark", {"breaks": True, "html": True})
+        md_result = md.render(research_result)
+        
         # Format the email body with HTML
         body = f"""<html>
-<body>
-    <h2>Scheduled Threat Research Report</h2>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h2 style="color: #22c55e;">Scheduled Threat Research Report</h2>
     <p><strong>Report Name:</strong> {research_config['name']}</p>
+    <p><strong>Description:</strong> {research_config.get('description', 'N/A')}</p>
     <p><strong>Generated at:</strong> {datetime.now(ADELAIDE_TZ).strftime('%Y-%m-%d %H:%M:%S %Z')}</p>
-    <hr>
-    <h3>Research Results:</h3>
-    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px;">
-        {research_result.replace(chr(10), "<br>")}
+    <hr style="border: 1px solid #ddd;">
+    <h3 style="color: #22c55e;">Research Results:</h3>
+    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; border-left: 4px solid #22c55e;">
+        {md_result}
     </div>
-    <hr>
+    <hr style="border: 1px solid #ddd;">
     <p><em>This is an automated report from Cerberus AI.</em></p>
 </body>
 </html>"""
@@ -143,7 +179,7 @@ async def send_scheduled_research_email(research_config: dict, research_result: 
         
         # Log the delivery
         await database.add_email_delivery_log(
-            scheduled_research_id=research_config['id'],
+            scheduled_research_id=research_config.get('id', 0),  # Use 0 for test emails
             subject=subject,
             recipients=recipient_emails,
             status="sent" if success else "failed",
@@ -157,13 +193,16 @@ async def send_scheduled_research_email(research_config: dict, research_result: 
         logger.error(f"Failed to send scheduled research email: {str(e)}")
         # Log the delivery failure
         try:
-            recipient_group_id = research_config['recipient_group_id']
-            recipients = await database.get_email_recipients(recipient_group_id)
-            recipient_emails = [recipient['email'] for recipient in recipients] if recipients else []
+            recipient_emails = [test_email] if test_email else []
+            if not test_email:
+                recipient_group_id = research_config.get('recipient_group_id')
+                if recipient_group_id:
+                    recipients = await database.get_email_recipients(recipient_group_id)
+                    recipient_emails = [recipient['email'] for recipient in recipients] if recipients else []
             
             await database.add_email_delivery_log(
-                scheduled_research_id=research_config['id'],
-                subject=f"Scheduled Threat Research Report: {research_config['name']}",
+                scheduled_research_id=research_config.get('id', 0),
+                subject=f"Scheduled Threat Research Report: {research_config.get('name', 'Unknown')}",
                 recipients=recipient_emails,
                 status="failed",
                 sent_at=datetime.now(ADELAIDE_TZ),

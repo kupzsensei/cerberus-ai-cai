@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { addEmailConfig, updateEmailConfig, deleteEmailConfig } from "../../api/apiService";
+import { addEmailConfig, updateEmailConfig, deleteEmailConfig, testEmailConfig } from "../../api/apiService";
 
 const EmailConfigSection = ({ emailConfigs, onRefresh }) => {
   const [isAdding, setIsAdding] = useState(false);
@@ -91,6 +91,59 @@ const EmailConfigSection = ({ emailConfigs, onRefresh }) => {
   const handleCancel = () => {
     setIsAdding(false);
     setEditingConfig(null);
+  };
+
+  const handleTestConfig = async (configId) => {
+    try {
+      // Determine which config data to use
+      let configToTest;
+      
+      if (configId) {
+        // If configId is provided, find the existing config
+        configToTest = emailConfigs.find(config => config.id === configId);
+        
+        // If we're editing this specific config, use form data instead of saved data
+        if (editingConfig && editingConfig.id === configId) {
+          configToTest = formData;
+        }
+      } else {
+        // If no configId is provided, this is testing a new/unsaved config
+        configToTest = formData;
+      }
+
+      if (!configToTest) {
+        alert("Configuration not found for testing.");
+        return;
+      }
+
+      // Create a form with the config data
+      const testFormData = new FormData();
+      Object.keys(configToTest).forEach(key => {
+        // Skip id field and add all other fields
+        if (key !== 'id') {
+          testFormData.append(key, configToTest[key]);
+        }
+      });
+
+      // Add a flag to indicate this is a test
+      testFormData.append('is_test', 'true');
+      
+      // Add config_id only if testing an existing saved config
+      if (configId) {
+        testFormData.append('config_id', configId);
+      }
+
+      const result = await testEmailConfig(testFormData);
+      
+      if (result.success) {
+        alert("Test email sent successfully!");
+      } else {
+        alert("Test email failed: " + (result.message || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Error testing email config:", error);
+      alert("Failed to test email configuration: " + (error.response?.data?.detail || error.message));
+    }
   };
 
   return (
@@ -213,6 +266,13 @@ const EmailConfigSection = ({ emailConfigs, onRefresh }) => {
               </button>
               <button
                 type="button"
+                className="bg-blue-700 hover:bg-blue-600 text-white py-2 px-4 rounded"
+                onClick={() => handleTestConfig(editingConfig ? editingConfig.id : null)}
+              >
+                Test Configuration
+              </button>
+              <button
+                type="button"
                 className="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded"
                 onClick={handleCancel}
               >
@@ -253,6 +313,12 @@ const EmailConfigSection = ({ emailConfigs, onRefresh }) => {
                     onClick={() => handleEdit(config)}
                   >
                     Edit
+                  </button>
+                  <button
+                    className="text-yellow-400 hover:text-yellow-300 mr-2"
+                    onClick={() => handleTestConfig(config.id)}
+                  >
+                    Test
                   </button>
                   <button
                     className="text-red-400 hover:text-red-300"

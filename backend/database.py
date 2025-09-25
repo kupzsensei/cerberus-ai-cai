@@ -325,9 +325,11 @@ async def initialize_email_scheduler_db():
                 model_name TEXT,
                 server_name TEXT,
                 server_type TEXT,
+                email_config_id INTEGER,  -- Reference to specific email configuration
                 created_at TIMESTAMP NOT NULL,
                 updated_at TIMESTAMP NOT NULL,
-                FOREIGN KEY (recipient_group_id) REFERENCES email_recipient_groups (id) ON DELETE CASCADE
+                FOREIGN KEY (recipient_group_id) REFERENCES email_recipient_groups (id) ON DELETE CASCADE,
+                FOREIGN KEY (email_config_id) REFERENCES email_configs (id) ON DELETE SET NULL
             )
         ''')
         
@@ -344,6 +346,20 @@ async def initialize_email_scheduler_db():
                 FOREIGN KEY (scheduled_research_id) REFERENCES scheduled_research (id) ON DELETE CASCADE
             )
         ''')
+        
+        # Migration: Add email_config_id column if it doesn't exist
+        try:
+            # Check if the column exists
+            async with db.execute("PRAGMA table_info(scheduled_research)") as cursor:
+                columns = await cursor.fetchall()
+                column_names = [column[1] for column in columns]
+                
+                if "email_config_id" not in column_names:
+                    # Add the column
+                    await db.execute("ALTER TABLE scheduled_research ADD COLUMN email_config_id INTEGER REFERENCES email_configs(id) ON DELETE SET NULL")
+                    print("Added email_config_id column to scheduled_research table")
+        except Exception as e:
+            print(f"Error adding email_config_id column: {e}")
         
         await db.commit()
 
@@ -647,7 +663,8 @@ async def add_scheduled_research(
     end_date: str = None,
     model_name: str = None,
     server_name: str = None,
-    server_type: str = None
+    server_type: str = None,
+    email_config_id: int = None  # New parameter
 ):
     """Adds a new scheduled research configuration."""
     now = datetime.now(ADELAIDE_TZ)
@@ -656,12 +673,13 @@ async def add_scheduled_research(
             """
             INSERT INTO scheduled_research 
             (name, description, frequency, day_of_week, day_of_month, hour, minute, start_date, end_date,
-             recipient_group_id, date_range_days, model_name, server_name, server_type,
+             recipient_group_id, date_range_days, model_name, server_name, server_type, email_config_id,
              created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (name, description, frequency, day_of_week, day_of_month, hour, minute, start_date, end_date,
-             recipient_group_id, date_range_days, model_name, server_name, server_type, now, now)
+             recipient_group_id, date_range_days, model_name, server_name, server_type, email_config_id,
+             now, now)
         )
         await db.commit()
 
@@ -670,9 +688,10 @@ async def get_scheduled_research_list():
     async with aiosqlite.connect(DATABASE_FILE) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("""
-            SELECT sr.*, erg.name as recipient_group_name
+            SELECT sr.*, erg.name as recipient_group_name, ec.smtp_server as email_config_smtp_server
             FROM scheduled_research sr
             LEFT JOIN email_recipient_groups erg ON sr.recipient_group_id = erg.id
+            LEFT JOIN email_configs ec ON sr.email_config_id = ec.id
             ORDER BY sr.created_at DESC
         """) as cursor:
             research_list = await cursor.fetchall()
@@ -683,9 +702,10 @@ async def get_scheduled_research(research_id: int):
     async with aiosqlite.connect(DATABASE_FILE) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("""
-            SELECT sr.*, erg.name as recipient_group_name
+            SELECT sr.*, erg.name as recipient_group_name, ec.smtp_server as email_config_smtp_server
             FROM scheduled_research sr
             LEFT JOIN email_recipient_groups erg ON sr.recipient_group_id = erg.id
+            LEFT JOIN email_configs ec ON sr.email_config_id = ec.id
             WHERE sr.id = ?
         """, (research_id,)) as cursor:
             research = await cursor.fetchone()
@@ -709,7 +729,8 @@ async def update_scheduled_research(
     date_range_days: int = None,
     model_name: str = None,
     server_name: str = None,
-    server_type: str = None
+    server_type: str = None,
+    email_config_id: int = None  # New parameter
 ):
     """Updates a scheduled research configuration."""
     now = datetime.now(ADELAIDE_TZ)
@@ -763,6 +784,9 @@ async def update_scheduled_research(
         if server_type is not None:
             fields.append("server_type = ?")
             values.append(server_type)
+        if email_config_id is not None:  # New parameter
+            fields.append("email_config_id = ?")
+            values.append(email_config_id)
             
         if fields:
             query = f"UPDATE scheduled_research SET {', '.join(fields)}, updated_at = ? WHERE id = ?"

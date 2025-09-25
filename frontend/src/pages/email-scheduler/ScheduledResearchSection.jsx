@@ -100,7 +100,8 @@ const ScheduledResearchSection = ({ scheduledResearch, recipientGroups, emailCon
       date_range_days: 7,
       model_name: "",
       server_name: "",
-      server_type: "ollama"
+      server_type: "ollama",
+      email_config_id: ""  // New field
     });
   };
 
@@ -122,7 +123,8 @@ const ScheduledResearchSection = ({ scheduledResearch, recipientGroups, emailCon
       date_range_days: research.date_range_days || 7,
       model_name: research.model_name || "",
       server_name: research.server_name || "",
-      server_type: research.server_type || "ollama"
+      server_type: research.server_type || "ollama",
+      email_config_id: research.email_config_id || ""  // New field
     });
   };
 
@@ -164,6 +166,9 @@ const ScheduledResearchSection = ({ scheduledResearch, recipientGroups, emailCon
         // Skip conditional fields based on frequency
         if (key === "day_of_week" && formData.frequency !== "weekly") return;
         if (key === "day_of_month" && formData.frequency !== "monthly") return;
+        
+        // Skip the scheduleTime field as it's only used for display
+        if (key === "scheduleTime") return;
         
         // Handle boolean values
         if (key === "is_active") {
@@ -308,27 +313,19 @@ const ScheduledResearchSection = ({ scheduledResearch, recipientGroups, emailCon
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium mb-1">Time (Hour) *</label>
+                <label className="block text-sm font-medium mb-1">Schedule Time *</label>
                 <input
-                  type="number"
-                  name="hour"
-                  min="0"
-                  max="23"
-                  value={formData.hour}
-                  onChange={handleChange}
-                  className="w-full p-2 border border-green-600 rounded-md bg-green-900/50 text-white"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Time (Minute) *</label>
-                <input
-                  type="number"
-                  name="minute"
-                  min="0"
-                  max="59"
-                  value={formData.minute}
-                  onChange={handleChange}
+                  type="time"
+                  name="scheduleTime"
+                  value={`${formData.hour.toString().padStart(2, '0')}:${formData.minute.toString().padStart(2, '0')}`}
+                  onChange={(e) => {
+                    const [hour, minute] = e.target.value.split(':');
+                    setFormData({
+                      ...formData,
+                      hour: parseInt(hour),
+                      minute: parseInt(minute)
+                    });
+                  }}
                   className="w-full p-2 border border-green-600 rounded-md bg-green-900/50 text-white"
                   required
                 />
@@ -361,6 +358,23 @@ const ScheduledResearchSection = ({ scheduledResearch, recipientGroups, emailCon
                     <option key={group.id} value={group.id}>{group.name}</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Email Configuration</label>
+                <select
+                  name="email_config_id"
+                  value={formData.email_config_id}
+                  onChange={handleChange}
+                  className="w-full p-2 border border-green-600 rounded-md bg-green-900/50 text-white"
+                >
+                  <option value="">Use default email configuration</option>
+                  {emailConfigs.map(config => (
+                    <option key={config.id} value={config.id}>
+                      {config.smtp_server}:{config.smtp_port} ({config.username})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-green-300 mt-1">Select specific email configuration for this research</p>
               </div>
               <div className="flex items-center">
                 <input

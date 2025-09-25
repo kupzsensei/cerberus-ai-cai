@@ -711,7 +711,7 @@ async def delete_email_recipient_endpoint(recipient_id: int):
 
 # --- Scheduled Research Endpoints ---
 
-@app.post("/scheduled-research", status_code=201)
+@app.post("/scheduled-research")
 async def add_scheduled_research_endpoint(
     name: str = Form(...),
     frequency: str = Form(...),  # daily, weekly, monthly
@@ -726,7 +726,8 @@ async def add_scheduled_research_endpoint(
     end_date: str = Form(None),
     model_name: str = Form(None),
     server_name: str = Form(None),
-    server_type: str = Form(None)
+    server_type: str = Form(None),
+    email_config_id: int = Form(None)  # New parameter
 ):
     """Adds a new scheduled research configuration."""
     # Validate frequency and required fields
@@ -743,7 +744,7 @@ async def add_scheduled_research_endpoint(
     await database.add_scheduled_research(
         name, frequency, hour, minute, recipient_group_id, date_range_days,
         description, day_of_week, day_of_month, start_date, end_date,
-        model_name, server_name, server_type
+        model_name, server_name, server_type, email_config_id  # Include email_config_id
     )
     return {"message": "Scheduled research configuration added successfully."}
 
@@ -778,7 +779,8 @@ async def update_scheduled_research_endpoint(
     date_range_days: int = Form(None),
     model_name: str = Form(None),
     server_name: str = Form(None),
-    server_type: str = Form(None)
+    server_type: str = Form(None),
+    email_config_id: int = Form(None)  # New parameter
 ):
     """Updates a scheduled research configuration."""
     research = await database.get_scheduled_research(research_id)
@@ -801,7 +803,7 @@ async def update_scheduled_research_endpoint(
     await database.update_scheduled_research(
         research_id, name, description, frequency, day_of_week, day_of_month,
         hour, minute, start_date, end_date, is_active, recipient_group_id,
-        date_range_days, model_name, server_name, server_type
+        date_range_days, model_name, server_name, server_type, email_config_id  # Include email_config_id
     )
     return {"message": "Scheduled research configuration updated successfully."}
 
@@ -822,3 +824,140 @@ async def get_email_delivery_logs_endpoint(scheduled_research_id: int = None):
     """Retrieves email delivery logs."""
     logs = await database.get_email_delivery_logs(scheduled_research_id)
     return {"logs": logs}
+
+# --- Test Email Endpoint ---
+
+@app.post("/test-email")
+async def test_email_endpoint(
+    smtp_server: str = Form(...),
+    smtp_port: int = Form(...),
+    username: str = Form(...),
+    password: str = Form(...),
+    sender_email: str = Form(...),
+    sender_name: str = Form(None),
+    use_tls: bool = Form(True),
+    use_ssl: bool = Form(False),
+    is_test: str = Form(None),
+    config_id: int = Form(None)
+):
+    """Sends a test email using the provided configuration."""
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    import smtplib
+    
+    try:
+        # If config_id is provided and is_test is true, we might want to get the config from DB
+        # But for a live test with potentially new credentials, we'll use the form data
+        
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = f"{sender_name or 'Cerberus AI'} <{sender_email}>"
+        msg['To'] = sender_email  # Send to the same address for testing
+        msg['Subject'] = "Cerberus AI - Email Configuration Test"
+        
+        # Create test email body
+        test_body = """
+        <html>
+        <body>
+            <h2>Test Email from Cerberus AI</h2>
+            <p>Your email configuration is working correctly!</p>
+            <p>This is a test email to confirm that your SMTP settings are properly configured.</p>
+            <hr>
+            <p><em>This is an automated test message from Cerberus AI.</em></p>
+        </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(test_body, 'html'))
+        
+        # Create SMTP session based on configuration
+        if use_ssl:
+            server = smtplib.SMTP_SSL(smtp_server, smtp_port)
+        else:
+            server = smtplib.SMTP(smtp_server, smtp_port)
+            if use_tls:
+                server.starttls()
+        
+        # Login and send email
+        server.login(username, password)
+        text = msg.as_string()
+        server.sendmail(sender_email, [sender_email], text)
+        server.quit()
+        
+        return {"success": True, "message": "Test email sent successfully!"}
+        
+    except Exception as e:
+        logging.error(f"Failed to send test email: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send test email: {str(e)}")
+
+# --- Test Scheduled Research Endpoint ---
+
+@app.post("/test-scheduled-research")
+async def test_scheduled_research_endpoint(
+    name: str = Form(...),
+    description: str = Form(None),
+    recipient_group_id: int = Form(None),
+    date_range_days: int = Form(...),
+    model_name: str = Form(None),
+    server_name: str = Form(None),
+    server_type: str = Form(...),
+    test_email: str = Form(None),  # Optional: if provided, send to this email instead of group
+    email_config_id: int = Form(None)  # Optional: specific email configuration to use
+):
+    """Tests scheduled research functionality by running it immediately."""
+    try:
+        from datetime import timedelta
+        import pytz
+        from research import perform_search
+        import email_service
+        
+        ADELAIDE_TZ = pytz.timezone('Australia/Adelaide')
+        
+        # Either recipient_group_id or test_email must be provided
+        if not recipient_group_id and not test_email:
+            raise HTTPException(status_code=400, detail="Either recipient_group_id or test_email must be provided")
+        
+        # Calculate date range for research
+        date_range_days = int(date_range_days)
+        end_date = datetime.now(ADELAIDE_TZ)
+        start_date = end_date - timedelta(days=date_range_days)
+        
+        # Format dates for query
+        start_date_str = start_date.strftime('%Y-%m-%d')
+        end_date_str = end_date.strftime('%Y-%m-%d')
+        
+        # Create query
+        query = f"cybersecurity incidents in Australia from {start_date_str} to {end_date_str}"
+        
+        # Perform research
+        result, generation_time = await perform_search(
+            query, server_name, model_name, server_type
+        )
+        
+        if not result:
+            raise HTTPException(status_code=400, detail="No research results found for the specified date range")
+        
+        # Create a mock research config for the test
+        research_config = {
+            'id': 0,  # Using 0 as a mock ID for test
+            'name': name,
+            'description': description,
+            'recipient_group_id': int(recipient_group_id) if recipient_group_id else 0,
+            'model_name': model_name,
+            'server_name': server_name,
+            'server_type': server_type
+        }
+        
+        # Send email with test_email parameter (can be None)
+        success = await email_service.send_scheduled_research_email(research_config, result, test_email, email_config_id)
+        
+        if success:
+            return {"success": True, "message": "Test research completed and email sent successfully!"}
+        else:
+            raise HTTPException(status_code=500, detail="Research completed but failed to send email")
+            
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
+    except Exception as e:
+        logging.error(f"Failed to test scheduled research: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to test scheduled research: {str(e)}")
