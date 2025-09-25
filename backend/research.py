@@ -1,10 +1,10 @@
 import os
 import logging
+import httpx
 from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_tavily import TavilySearch
-import requests
 import json
 import re
 import time
@@ -48,6 +48,18 @@ tavily_tool = TavilySearch(
 
 # Function to perform a search
 async def perform_search(query, server_name: str = None, model_name: str = "granite3.3", server_type: str = "ollama"):
+    """
+    Performs a research search using the specified AI server and model.
+    
+    Args:
+        query: The search query
+        server_name: Name of the AI server to use
+        model_name: Name of the model to use
+        server_type: Type of server (ollama or gemini)
+        
+    Returns:
+        tuple: (result, generation_time) or (error_message, None)
+    """
     try:
         # Start timer for the entire research process
         overall_start_time = time.time()
@@ -72,10 +84,11 @@ async def perform_search(query, server_name: str = None, model_name: str = "gran
                 api_key=os.environ.get("OPENROUTER_API_KEY"),
                 base_url=server_url_or_key.replace("/api/generate", "/")
             )
-            # Test connection to the selected Ollama server
-            response = requests.get(f"{server_url_or_key.replace('/api/generate', '')}/api/tags")
-            if response.status_code != 200:
-                raise ConnectionError(f"Failed to connect to Ollama server at {server_url_or_key}")
+            # Test connection to the selected Ollama server using async HTTP client
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{server_url_or_key.replace('/api/generate', '')}/api/tags")
+                if response.status_code != 200:
+                    raise ConnectionError(f"Failed to connect to Ollama server at {server_url_or_key}")
         elif server_type == "gemini":
             if server_name:
                 selected_server = await database.get_external_ai_server_by_name(server_name)
@@ -101,8 +114,10 @@ async def perform_search(query, server_name: str = None, model_name: str = "gran
         logger.info(f"Processing query: {query}")
         
         # Get raw Tavily results
-        raw_results = tavily_tool.invoke(query)
-        logger.info(f"Raw Tavily results: {json.dumps(raw_results, indent=2)}")
+        # Since TavilySearch doesn't have an async version, we'll run it in a thread pool
+        import asyncio
+        raw_results = await asyncio.get_event_loop().run_in_executor(None, tavily_tool.invoke, query)
+        logger.info(f"Raw Tavily results retrieved")
         
         # Filter results to ensure domain compliance and relevance
         filtered_results = [
@@ -124,7 +139,8 @@ async def perform_search(query, server_name: str = None, model_name: str = "gran
         logger.info(f"Filtered results count: {len(filtered_results)}")
         
         # Generate output from raw results
-        output = format_raw_results(filtered_results, 0, llm)
+        # Run the formatting in a thread pool to avoid blocking
+        output = await asyncio.get_event_loop().run_in_executor(None, format_raw_results, filtered_results, 0, llm)
         
         if not output.strip():
             logger.warning("No relevant results found")
@@ -317,10 +333,11 @@ async def investigate(query: str, server_name: str = None, model_name: str = "gr
                 api_key=os.environ.get("OPENROUTER_API_KEY"),
                 base_url=server_url_or_key.replace("/api/generate", "/")
             )
-            # Test connection to the selected Ollama server
-            response = requests.get(f"{server_url_or_key.replace('/api/generate', '')}/api/tags")
-            if response.status_code != 200:
-                raise ConnectionError(f"Failed to connect to Ollama server at {server_url_or_key}")
+            # Test connection to the selected Ollama server using async HTTP client
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{server_url_or_key.replace('/api/generate', '')}/api/tags")
+                if response.status_code != 200:
+                    raise ConnectionError(f"Failed to connect to Ollama server at {server_url_or_key}")
         elif server_type == "gemini":
             if server_name:
                 selected_server = await database.get_external_ai_server_by_name(server_name)
@@ -340,16 +357,19 @@ async def investigate(query: str, server_name: str = None, model_name: str = "gr
             raise ValueError(f"Unsupported server type: {server_type}")
 
         # Get raw Tavily results
+        # Since TavilySearch doesn't have an async version, we'll run it in a thread pool
+        import asyncio
         tavily_tool_unrestricted = TavilySearch(
             max_results=15,
             topic="general",
             search_depth="advanced",
         )
-        raw_results = tavily_tool_unrestricted.invoke(query)
-        logger.info(f"Raw Tavily results: {json.dumps(raw_results, indent=2)}")
+        raw_results = await asyncio.get_event_loop().run_in_executor(None, tavily_tool_unrestricted.invoke, query)
+        logger.info(f"Raw Tavily results retrieved")
 
         # Generate the detailed investigation report
-        output = format_investigation_results(query, raw_results.get("results", []), llm)
+        # Run the formatting in a thread pool to avoid blocking
+        output = await asyncio.get_event_loop().run_in_executor(None, format_investigation_results, query, raw_results.get("results", []), llm)
 
         if not output.strip():
             logger.warning("No relevant results found")
