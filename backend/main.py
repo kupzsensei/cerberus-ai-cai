@@ -485,7 +485,7 @@ async def chat_with_ai_endpoint(
                         }]
                     }]
                 }
-                response = await client.post(f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={server_url_or_key}", json=payload, timeout=180.0)
+                response = await client.post(f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={server_url_or_key}", json=payload, timeout=180.0)
                 response.raise_for_status()
                 api_response = response.json()
                 processed_text = api_response.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
@@ -817,6 +817,14 @@ async def delete_scheduled_research_endpoint(research_id: int):
     await database.delete_scheduled_research(research_id)
     return {"message": "Scheduled research configuration deleted successfully."}
 
+# --- Email Config Debug Endpoint ---
+
+@app.get("/debug-email-configs")
+async def debug_email_configs():
+    """Debug endpoint to check email configurations."""
+    configs = await database.get_email_configs()
+    return {"configs": configs, "count": len(configs)}
+
 # --- Email Delivery Log Endpoints ---
 
 @app.get("/email-delivery-logs")
@@ -890,21 +898,20 @@ async def test_email_endpoint(
         logging.error(f"Failed to send test email: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to send test email: {str(e)}")
 
-# --- Test Scheduled Research Endpoint ---
-
-@app.post("/test-scheduled-research")
-async def test_scheduled_research_endpoint(
-    name: str = Form(...),
-    description: str = Form(None),
-    recipient_group_id: str = Form(None),
-    date_range_days: int = Form(...),
-    model_name: str = Form(None),
-    server_name: str = Form(None),
-    server_type: str = Form(...),
-    test_email: str = Form(None),  # Optional: if provided, send to this email instead of group
-    email_config_id: str = Form(None)  # Optional: specific email configuration to use
+# Background task function for test scheduled research
+async def perform_test_scheduled_research(
+    task_id: str,
+    name: str,
+    description: str,
+    recipient_group_id: str,
+    date_range_days: int,
+    model_name: str,
+    server_name: str,
+    server_type: str,
+    test_email: str = None,
+    email_config_id: str = None
 ):
-    """Tests scheduled research functionality by running it immediately."""
+    """Background task to perform the actual test scheduled research work."""
     try:
         from datetime import timedelta
         import pytz
@@ -919,25 +926,26 @@ async def test_scheduled_research_endpoint(
             try:
                 recipient_group_id_int = int(recipient_group_id)
             except ValueError:
-                raise HTTPException(status_code=400, detail="recipient_group_id must be a valid integer")
+                logging.error(f"Invalid recipient_group_id: {recipient_group_id}")
+                return {"status": "failed", "task_id": task_id, "error": "Invalid recipient_group_id"}
         
         email_config_id_int = None
         if email_config_id is not None and str(email_config_id).strip() != "":
             try:
                 email_config_id_int = int(email_config_id)
             except ValueError:
-                raise HTTPException(status_code=400, detail="email_config_id must be a valid integer")
+                logging.error(f"Invalid email_config_id: {email_config_id}")
+                return {"status": "failed", "task_id": task_id, "error": "Invalid email_config_id"}
         
         # Either recipient_group_id or test_email must be provided
-        # Handle the case where form fields might be empty strings
         has_recipient_group = recipient_group_id_int is not None
         has_test_email = test_email is not None and str(test_email).strip() != ""
         
         if not has_recipient_group and not has_test_email:
-            raise HTTPException(status_code=400, detail="Either recipient_group_id or test_email must be provided")
+            logging.error("Either recipient_group_id or test_email must be provided")
+            return {"status": "failed", "task_id": task_id, "error": "Either recipient_group_id or test_email must be provided"}
         
         # Calculate date range for research
-        date_range_days = int(date_range_days)
         end_date = datetime.now(ADELAIDE_TZ)
         start_date = end_date - timedelta(days=date_range_days)
         
@@ -954,7 +962,8 @@ async def test_scheduled_research_endpoint(
         )
         
         if not result:
-            raise HTTPException(status_code=400, detail="No research results found for the specified date range")
+            logging.error("No research results found for the specified date range")
+            return {"status": "failed", "task_id": task_id, "error": "No research results found for the specified date range"}
         
         # Create a mock research config for the test
         research_config = {
@@ -972,18 +981,66 @@ async def test_scheduled_research_endpoint(
             research_config, 
             result, 
             test_email, 
-            email_config_id,
+            email_config_id_int,
             date_range_start=start_date_str,
             date_range_end=end_date_str
         )
         
         if success:
-            return {"success": True, "message": "Test research completed and email sent successfully!"}
+            logging.info("Test research completed and email sent successfully!")
+            return {"status": "completed", "task_id": task_id, "message": "Test research completed and email sent successfully!"}
         else:
-            raise HTTPException(status_code=500, detail="Research completed but failed to send email")
+            # Check if the failure was due to missing email config
+            email_config = None
+            if email_config_id_int is not None:
+                email_config = await database.get_email_config(email_config_id_int)
+            else:
+                email_configs = await database.get_email_configs()
+                if email_configs:
+                    email_config = email_configs[0]
             
-    except HTTPException:
-        raise  # Re-raise HTTP exceptions
+            if not email_config:
+                logging.info("Test research completed but no email configuration found to send the result")
+                return {"status": "completed", "task_id": task_id, "message": "Test research completed but no email configuration found. Results available in the research section."}
+            else:
+                logging.error("Research completed but failed to send email")
+                return {"status": "failed", "task_id": task_id, "error": "Research completed but failed to send email"}
+            
     except Exception as e:
         logging.error(f"Failed to test scheduled research: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to test scheduled research: {str(e)}")
+        return {"status": "failed", "task_id": task_id, "error": f"Failed to test scheduled research: {str(e)}"}
+
+
+@app.post("/test-scheduled-research")
+async def test_scheduled_research_endpoint(
+    background_tasks: BackgroundTasks,
+    name: str = Form(...),
+    description: str = Form(None),
+    recipient_group_id: str = Form(None),
+    date_range_days: int = Form(...),
+    model_name: str = Form(None),
+    server_name: str = Form(None),
+    server_type: str = Form(...),
+    test_email: str = Form(None),  # Optional: if provided, send to this email instead of group
+    email_config_id: str = Form(None)  # Optional: specific email configuration to use
+):
+    """Tests scheduled research functionality by running it in the background and returning a task ID immediately."""
+    import uuid
+    task_id = str(uuid.uuid4())
+    
+    # Run the actual processing in the background
+    background_tasks.add_task(
+        perform_test_scheduled_research,
+        task_id,
+        name,
+        description,
+        recipient_group_id,
+        date_range_days,
+        model_name,
+        server_name,
+        server_type,
+        test_email,
+        email_config_id
+    )
+    
+    return {"task_id": task_id, "message": "Test scheduled research started in the background"}

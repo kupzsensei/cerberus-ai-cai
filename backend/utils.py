@@ -76,7 +76,7 @@ async def process_with_gemini_api(client: httpx.AsyncClient, text_chunk: str, us
     }
     try:
         logging.info(f"Sending request to Gemini with model: {model_name}")
-        full_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        full_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
         logging.info(f"Sending request to Gemini URL: {full_url}")
         response = await client.post(full_url, json=payload, timeout=180.0)
         response.raise_for_status()  # Raises an exception for 4xx or 5xx status codes

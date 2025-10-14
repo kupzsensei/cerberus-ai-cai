@@ -129,6 +129,8 @@ async def send_scheduled_research_email(research_config: dict, research_result: 
             email_config = await get_active_email_config()
         if not email_config:
             logger.error("No email configuration found")
+            # Instead of returning False, provide more context about the missing configuration
+            logger.info("Email configuration is required to send scheduled research reports. Please configure an email server in the settings.")
             return False
         
         # Get recipient group and recipients

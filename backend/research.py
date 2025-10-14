@@ -100,7 +100,7 @@ async def perform_search(query, server_name: str = None, model_name: str = "gran
                     raise ValueError("No Gemini servers configured.")
             server_url_or_key = selected_server['api_key']
             llm = ChatGoogleGenerativeAI(
-                model=f"models/gemini-1.5-flash",
+                model=f"models/gemini-2.5-flash",
                 temperature=0,
                 google_api_key=server_url_or_key
             )
@@ -349,7 +349,7 @@ async def investigate(query: str, server_name: str = None, model_name: str = "gr
                     raise ValueError("No Gemini servers configured.")
             server_url_or_key = selected_server['api_key']
             llm = ChatGoogleGenerativeAI(
-                model=f"models/gemini-1.5-flash",
+                model=f"models/gemini-2.5-flash",
                 temperature=0,
                 google_api_key=server_url_or_key
             )

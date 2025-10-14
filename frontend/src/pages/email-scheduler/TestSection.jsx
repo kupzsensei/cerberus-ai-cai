@@ -29,6 +29,7 @@ const TestSection = () => {
   const [loadingModels, setLoadingModels] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [taskId, setTaskId] = useState(null);
 
   // Fetch initial data
   useEffect(() => {
@@ -123,10 +124,12 @@ const TestSection = () => {
 
       const result = await testScheduledResearch(formData);
       
-      if (result.success) {
-        setMessage("Test email sent successfully! " + (result.message || ""));
+      // The new API returns a task ID instead of immediate success/failure
+      if (result.task_id) {
+        setMessage("Test started successfully! Task ID: " + result.task_id + ". Check the delivery logs for status updates.");
+        setTaskId(result.task_id);
       } else {
-        setMessage("Test failed: " + (result.message || "Unknown error"));
+        setMessage("Test failed: Unexpected response format");
       }
     } catch (error) {
       console.error("Error testing scheduled research:", error);
