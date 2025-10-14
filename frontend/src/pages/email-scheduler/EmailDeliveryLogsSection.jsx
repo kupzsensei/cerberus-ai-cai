@@ -106,6 +106,7 @@ const EmailDeliveryLogsSection = ({ scheduledResearch }) => {
                 <th className="py-2 px-4 text-left">Research</th>
                 <th className="py-2 px-4 text-left">Subject</th>
                 <th className="py-2 px-4 text-left">Recipients</th>
+                <th className="py-2 px-4 text-left">Date Range</th>
                 <th className="py-2 px-4 text-left">Status</th>
                 <th className="py-2 px-4 text-left">Sent At</th>
                 <th className="py-2 px-4 text-left">Error</th>
@@ -119,6 +120,11 @@ const EmailDeliveryLogsSection = ({ scheduledResearch }) => {
                   <td className="py-2 px-4 max-w-xs truncate" title={log.recipients?.join(", ")}>
                     {formatRecipients(log.recipients)}
                   </td>
+                  <td className="py-2 px-4">
+                    {log.date_range_start && log.date_range_end 
+                      ? `${log.date_range_start} to ${log.date_range_end}`
+                      : "N/A"}
+                  </td>
                   <td className="py-2 px-4">{getStatusBadge(log.status)}</td>
                   <td className="py-2 px-4">
                     {log.sent_at ? new Date(log.sent_at).toLocaleString() : "N/A"}
@@ -130,7 +136,7 @@ const EmailDeliveryLogsSection = ({ scheduledResearch }) => {
               ))}
               {filteredLogs.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="py-4 px-4 text-center">
+                  <td colSpan="7" className="py-4 px-4 text-center">
                     No email delivery logs found.
                   </td>
                 </tr>

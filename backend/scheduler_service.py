@@ -189,7 +189,14 @@ class ScheduledResearchExecutor:
             if result:
                 # Send email with results and email_config_id if provided
                 email_config_id = research_config.get('email_config_id')
-                success = await email_service.send_scheduled_research_email(research_config, result, None, email_config_id)
+                success = await email_service.send_scheduled_research_email(
+                    research_config, 
+                    result, 
+                    None, 
+                    email_config_id,
+                    date_range_start=start_date_str,
+                    date_range_end=end_date_str
+                )
                 if success:
                     logger.info(f"Successfully sent research report for: {research_config['name']}")
                 else:

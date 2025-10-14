@@ -896,13 +896,13 @@ async def test_email_endpoint(
 async def test_scheduled_research_endpoint(
     name: str = Form(...),
     description: str = Form(None),
-    recipient_group_id: int = Form(None),
+    recipient_group_id: str = Form(None),
     date_range_days: int = Form(...),
     model_name: str = Form(None),
     server_name: str = Form(None),
     server_type: str = Form(...),
     test_email: str = Form(None),  # Optional: if provided, send to this email instead of group
-    email_config_id: int = Form(None)  # Optional: specific email configuration to use
+    email_config_id: str = Form(None)  # Optional: specific email configuration to use
 ):
     """Tests scheduled research functionality by running it immediately."""
     try:
@@ -913,8 +913,27 @@ async def test_scheduled_research_endpoint(
         
         ADELAIDE_TZ = pytz.timezone('Australia/Adelaide')
         
+        # Convert string parameters to appropriate types
+        recipient_group_id_int = None
+        if recipient_group_id is not None and str(recipient_group_id).strip() != "":
+            try:
+                recipient_group_id_int = int(recipient_group_id)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="recipient_group_id must be a valid integer")
+        
+        email_config_id_int = None
+        if email_config_id is not None and str(email_config_id).strip() != "":
+            try:
+                email_config_id_int = int(email_config_id)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="email_config_id must be a valid integer")
+        
         # Either recipient_group_id or test_email must be provided
-        if not recipient_group_id and not test_email:
+        # Handle the case where form fields might be empty strings
+        has_recipient_group = recipient_group_id_int is not None
+        has_test_email = test_email is not None and str(test_email).strip() != ""
+        
+        if not has_recipient_group and not has_test_email:
             raise HTTPException(status_code=400, detail="Either recipient_group_id or test_email must be provided")
         
         # Calculate date range for research
@@ -942,14 +961,21 @@ async def test_scheduled_research_endpoint(
             'id': 0,  # Using 0 as a mock ID for test
             'name': name,
             'description': description,
-            'recipient_group_id': int(recipient_group_id) if recipient_group_id else 0,
+            'recipient_group_id': recipient_group_id_int,
             'model_name': model_name,
             'server_name': server_name,
             'server_type': server_type
         }
         
         # Send email with test_email parameter (can be None)
-        success = await email_service.send_scheduled_research_email(research_config, result, test_email, email_config_id)
+        success = await email_service.send_scheduled_research_email(
+            research_config, 
+            result, 
+            test_email, 
+            email_config_id,
+            date_range_start=start_date_str,
+            date_range_end=end_date_str
+        )
         
         if success:
             return {"success": True, "message": "Test research completed and email sent successfully!"}

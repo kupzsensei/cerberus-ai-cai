@@ -343,9 +343,30 @@ async def initialize_email_scheduler_db():
                 status TEXT NOT NULL,  -- sent, failed
                 error_message TEXT,
                 sent_at TIMESTAMP,
+                date_range_start TEXT,
+                date_range_end TEXT,
                 FOREIGN KEY (scheduled_research_id) REFERENCES scheduled_research (id) ON DELETE CASCADE
             )
         ''')
+        
+        # Migration: Add date_range_start and date_range_end columns if they don't exist
+        try:
+            # Check if the columns exist
+            async with db.execute("PRAGMA table_info(email_delivery_logs)") as cursor:
+                columns = await cursor.fetchall()
+                column_names = [column[1] for column in columns]
+                
+                if "date_range_start" not in column_names:
+                    # Add the column
+                    await db.execute("ALTER TABLE email_delivery_logs ADD COLUMN date_range_start TEXT")
+                    print("Added date_range_start column to email_delivery_logs table")
+                    
+                if "date_range_end" not in column_names:
+                    # Add the column
+                    await db.execute("ALTER TABLE email_delivery_logs ADD COLUMN date_range_end TEXT")
+                    print("Added date_range_end column to email_delivery_logs table")
+        except Exception as e:
+            print(f"Error adding date range columns: {e}")
         
         # Migration: Add email_config_id column if it doesn't exist
         try:
@@ -827,7 +848,9 @@ async def add_email_delivery_log(
     recipients: list,
     status: str,
     sent_at: datetime = None,
-    error_message: str = None
+    error_message: str = None,
+    date_range_start: str = None,
+    date_range_end: str = None
 ):
     """Adds a new email delivery log entry."""
     recipients_json = json.dumps(recipients)
@@ -835,10 +858,10 @@ async def add_email_delivery_log(
         await db.execute(
             """
             INSERT INTO email_delivery_logs 
-            (scheduled_research_id, subject, recipients, status, error_message, sent_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (scheduled_research_id, subject, recipients, status, error_message, sent_at, date_range_start, date_range_end)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (scheduled_research_id, subject, recipients_json, status, error_message, sent_at)
+            (scheduled_research_id, subject, recipients_json, status, error_message, sent_at, date_range_start, date_range_end)
         )
         await db.commit()
 

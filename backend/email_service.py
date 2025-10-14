@@ -102,7 +102,7 @@ def send_email_with_config(config: dict, recipients: List[str], subject: str, bo
         logger.error(f"Failed to send email: {str(e)}")
         return False
 
-async def send_scheduled_research_email(research_config: dict, research_result: str, test_email: str = None, email_config_id: int = None):
+async def send_scheduled_research_email(research_config: dict, research_result: str, test_email: str = None, email_config_id: int = None, date_range_start: str = None, date_range_end: str = None):
     """
     Send scheduled research results via email.
     
@@ -111,6 +111,8 @@ async def send_scheduled_research_email(research_config: dict, research_result: 
         research_result: The research result content to send
         test_email: Optional email address to send to instead of the group
         email_config_id: Optional specific email configuration ID to use
+        date_range_start: Start date of the research period (for display in email and logs)
+        date_range_end: End date of the research period (for display in email and logs)
     
     Returns:
         bool: True if successful, False otherwise
@@ -163,6 +165,7 @@ async def send_scheduled_research_email(research_config: dict, research_result: 
     <h2 style="color: #22c55e;">Scheduled Threat Research Report</h2>
     <p><strong>Report Name:</strong> {research_config['name']}</p>
     <p><strong>Description:</strong> {research_config.get('description', 'N/A')}</p>
+    <p><strong>Research Period:</strong> {date_range_start or 'N/A'} to {date_range_end or 'N/A'}</p>
     <p><strong>Generated at:</strong> {datetime.now(ADELAIDE_TZ).strftime('%Y-%m-%d %H:%M:%S %Z')}</p>
     <hr style="border: 1px solid #ddd;">
     <h3 style="color: #22c55e;">Research Results:</h3>
@@ -184,7 +187,9 @@ async def send_scheduled_research_email(research_config: dict, research_result: 
             recipients=recipient_emails,
             status="sent" if success else "failed",
             sent_at=datetime.now(ADELAIDE_TZ),
-            error_message=None if success else "Failed to send email"
+            error_message=None if success else "Failed to send email",
+            date_range_start=date_range_start,
+            date_range_end=date_range_end
         )
         
         return success
@@ -196,7 +201,7 @@ async def send_scheduled_research_email(research_config: dict, research_result: 
             recipient_emails = [test_email] if test_email else []
             if not test_email:
                 recipient_group_id = research_config.get('recipient_group_id')
-                if recipient_group_id:
+                if recipient_group_id is not None and recipient_group_id != 0:
                     recipients = await database.get_email_recipients(recipient_group_id)
                     recipient_emails = [recipient['email'] for recipient in recipients] if recipients else []
             
@@ -206,7 +211,9 @@ async def send_scheduled_research_email(research_config: dict, research_result: 
                 recipients=recipient_emails,
                 status="failed",
                 sent_at=datetime.now(ADELAIDE_TZ),
-                error_message=str(e)
+                error_message=str(e),
+                date_range_start=date_range_start,
+                date_range_end=date_range_end
             )
         except Exception as log_error:
             logger.error(f"Failed to log email delivery failure: {str(log_error)}")
