@@ -467,11 +467,16 @@ async def chat_with_ai_endpoint(
                 for msg in messages_list:
                     ollama_messages.append({"role": msg['role'], "content": msg['content']})
                 
-                response = await client.post(f"{server_url_or_key.rstrip('/')}/api/chat", json={
+                payload = {
                     "model": model_name,
                     "messages": ollama_messages,
-                    "stream": False
-                }, timeout=180.0)
+                    "stream": False,
+                    "options": {
+                        "num_predict": utils.config.get('llm', {}).get('num_predict', 384)
+                    }
+                }
+                async with utils.LLM_SEMAPHORE:
+                    response = await client.post(f"{server_url_or_key.rstrip('/')}/api/chat", json=payload, timeout=180.0)
                 response.raise_for_status()
                 api_response = response.json()
                 processed_text = api_response.get('message', {}).get('content', '')
@@ -485,7 +490,8 @@ async def chat_with_ai_endpoint(
                         }]
                     }]
                 }
-                response = await client.post(f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={server_url_or_key}", json=payload, timeout=180.0)
+                async with utils.LLM_SEMAPHORE:
+                    response = await client.post(f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={server_url_or_key}", json=payload, timeout=180.0)
                 response.raise_for_status()
                 api_response = response.json()
                 processed_text = api_response.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')

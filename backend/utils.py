@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 from PIL import Image
 import pytesseract
 import io
+import asyncio
 
 # --- Configuration Loading ---
 def load_config(config_file='config.json'):
@@ -36,6 +37,16 @@ else:
     logging.warning("Tesseract path not configured in config.json. OCR will fail if Tesseract is not in the system's PATH.")
 
 # --- Core Logic ---
+LLM_CONFIG = config.get('llm', {})
+NUM_PREDICT = LLM_CONFIG.get('num_predict', 384)
+
+CONCURRENCY_CONFIG = config.get('concurrency', {})
+LLM_MAX_INFLIGHT = CONCURRENCY_CONFIG.get('llm_max_inflight', 1)
+try:
+    LLM_SEMAPHORE = asyncio.Semaphore(LLM_MAX_INFLIGHT)
+except Exception:
+    # Fallback to a single-permit semaphore if initialization fails
+    LLM_SEMAPHORE = asyncio.Semaphore(1)
 async def process_with_ollama_api(client: httpx.AsyncClient, text_chunk: str, user_prompt: str, model_name: str, ollama_api_url: str) -> str:
     """Sends a text chunk to the Ollama API for processing using a specific model."""
     combined_prompt = f"{user_prompt}\n\n---\n\n{text_chunk}"
@@ -43,14 +54,18 @@ async def process_with_ollama_api(client: httpx.AsyncClient, text_chunk: str, us
     payload = {
         "model": model_name,
         "prompt": combined_prompt,
-        "stream": False # We want the full response at once
+        "stream": False,  # We want the full response at once
+        "options": {
+            "num_predict": NUM_PREDICT
+        }
     }
     try:
         logging.info(f"Sending request to Ollama with model: {model_name}")
         # Ensure the URL ends with /api/generate
         full_url = f"{ollama_api_url.rstrip('/')}/api/generate"
         logging.info(f"Sending request to Ollama URL: {full_url}")
-        response = await client.post(full_url, json=payload, timeout=180.0)
+        async with LLM_SEMAPHORE:
+            response = await client.post(full_url, json=payload, timeout=180.0)
         response.raise_for_status()  # Raises an exception for 4xx or 5xx status codes
         api_response = response.json()
         return api_response.get('response', '')
@@ -78,7 +93,8 @@ async def process_with_gemini_api(client: httpx.AsyncClient, text_chunk: str, us
         logging.info(f"Sending request to Gemini with model: {model_name}")
         full_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
         logging.info(f"Sending request to Gemini URL: {full_url}")
-        response = await client.post(full_url, json=payload, timeout=180.0)
+        async with LLM_SEMAPHORE:
+            response = await client.post(full_url, json=payload, timeout=180.0)
         response.raise_for_status()  # Raises an exception for 4xx or 5xx status codes
         api_response = response.json()
         return api_response.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')

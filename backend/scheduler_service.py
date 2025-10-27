@@ -1,11 +1,13 @@
 import asyncio
 import logging
+import random
 from datetime import datetime, timedelta
 import pytz
 from typing import List
 import database
 import research
 import email_service
+import utils
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -223,6 +225,15 @@ class ScheduledResearchExecutor:
                 for research_config in research_list:
                     if await self.should_run_now(research_config):
                         logger.info(f"Scheduled research '{research_config['name']}' should run now")
+                        # Optional jitter to avoid same-minute pileups
+                        try:
+                            jitter_max = utils.config.get('scheduler', {}).get('jitter_seconds_max', 0)
+                            if jitter_max and jitter_max > 0:
+                                delay = random.uniform(0, float(jitter_max))
+                                logger.info(f"Applying jitter of {delay:.1f}s before executing '{research_config['name']}'")
+                                await asyncio.sleep(delay)
+                        except Exception:
+                            pass
                         # Execute the research
                         await self.execute_scheduled_research(research_config)
                         

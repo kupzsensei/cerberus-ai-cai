@@ -88,6 +88,12 @@ tavily_tool = TavilySearch(
     include_domains=include_domains
 )
 
+# Config-driven limits
+_limits_cfg = utils.config.get('research_limits', {})
+MAX_RESULTS_TO_ANALYZE = _limits_cfg.get('max_results_to_analyze', 12)
+MAX_ARTICLE_CHARS = _limits_cfg.get('max_article_chars', 4000)
+TARGET_MIN_RESULTS = _limits_cfg.get('target_min_results', MAX_RESULTS_TO_ANALYZE)
+
 # Function to perform a search
 async def perform_search(query, server_name: str = None, model_name: str = "granite3.3", server_type: str = "ollama"):
     """
@@ -182,7 +188,7 @@ async def perform_search(query, server_name: str = None, model_name: str = "gran
         logger.info(f"Filtered results count: {len(filtered_results)}")
 
         # If too few candidates, do a second Tavily pass (unrestricted) to reach >=10 incidents
-        if len(filtered_results) < 30:
+        if len(filtered_results) < TARGET_MIN_RESULTS:
             tavily_tool_unrestricted = TavilySearch(
                 max_results=50,
                 topic="general",
@@ -302,8 +308,8 @@ def format_raw_results(results, start_count, llm, range_start=None, range_end=No
             text = unescape(text)
             text = re.sub(r"\s+", " ", text).strip()
             # Limit length to avoid overloading prompt
-            if len(text) > 12000:
-                text = text[:12000]
+            if len(text) > MAX_ARTICLE_CHARS:
+                text = text[:MAX_ARTICLE_CHARS]
             # Prefer fetched content if it seems longer than the snippet
             if len(text) > max(len(fallback), 1000):
                 return text, resp.text
@@ -471,7 +477,7 @@ def format_raw_results(results, start_count, llm, range_start=None, range_end=No
                 return v
         return "Not specified"
 
-    for _idx, result in enumerate(results[:50], start_count + 1):
+    for _idx, result in enumerate(results[:MAX_RESULTS_TO_ANALYZE], start_count + 1):
         title = result.get("title", "Untitled Incident")
         snippet = result.get("content", "No description available")
         url = result.get("url", "Not specified")
