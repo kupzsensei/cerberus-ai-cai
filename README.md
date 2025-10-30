@@ -39,7 +39,7 @@ Cerberus AI is a comprehensive full-stack application designed to empower users 
     *   Ollama (external service) - Facilitates running large language models locally.
     *   Gemini (external service) - Google's family of generative AI models.
     *   LangChain - Framework for developing applications powered by language models.
-    *   Tavily Search API - For enhanced search capabilities in research and investigation modules.
+    *   SERPAPI (primary) + Tavily (fallback) - Web search used by research and investigation modules.
 
 ## Prerequisites
 

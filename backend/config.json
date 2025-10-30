@@ -7,9 +7,9 @@
     "chunk_size": 2000,
     "tesseract_path": null,
     "research_limits": {
-        "max_results_to_analyze": 12,
+        "max_results_to_analyze": 30,
         "max_article_chars": 4000,
-        "target_min_results": 12
+        "target_min_results": 100
     },
     "llm": {
         "num_predict": 384

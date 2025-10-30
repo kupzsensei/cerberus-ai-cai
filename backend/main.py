@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse
 
 # main.py
 import os
+import re
 import httpx
 import logging
 from datetime import datetime
@@ -175,7 +176,7 @@ async def pdf_professor_direct(
     processed_text = await utils.process_pdf_content(pdf_content, prompt, client, model_name, server_type, server_url_or_key)
     
     if "[Error:" in processed_text:
-         raise HTTPException(status_code=500, detail=f"Failed to process PDF. Reason: {processed_text}")
+        raise HTTPException(status_code=500, detail=f"Failed to process PDF. Reason: {processed_text}")
 
     return {"processed_text": processed_text, "model_used": model_name}
 
@@ -222,14 +223,37 @@ async def delete_task_endpoint(task_id: str):
     return {"message": f"Task '{task_id}' and associated file were successfully deleted."}
 
 @app.post("/research")
-async def research_endpoint(query: str = Form(...), server_name: str = Form(...), model_name: str = Form(...), server_type: str = Form(...)):
+async def research_endpoint(
+    query: str = Form(...),
+    server_name: str = Form(...),
+    model_name: str = Form(...),
+    server_type: str = Form(...),
+    seed_urls: str = Form(None),
+    focus_on_seed: bool = Form(True)
+):
     """
     Performs a research query and returns the results.
     """
     if not query:
         raise HTTPException(status_code=400, detail="A query is required.")
     
-    result, generation_time = await research.perform_search(query, server_name, model_name, server_type)
+    # Parse optional seed URLs: JSON array or newline-separated
+    seed_list = None
+    if seed_urls:
+        s = seed_urls.strip()
+        if s:
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, list):
+                    seed_list = [str(u) for u in parsed]
+            except Exception:
+                # Fallback: newline/space separated
+                seed_list = [u.strip() for u in re.split(r"[\r\n\s]+", s) if u.strip()]
+
+    result, generation_time = await research.perform_search(
+        query, server_name, model_name, server_type,
+        seed_urls=seed_list, focus_on_seed=focus_on_seed
+    )
     
     return {"result": result, "generation_time": generation_time}
 

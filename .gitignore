@@ -73,9 +73,11 @@ typings/
 .yarn-integrity
 
 # dotenv environment variables file
-.env
-.env.test
-.env.production
+# Keep environment files tracked for this private repo as requested
+# (frontend/.env and backend/.env remain ignored)
+# .env
+# .env.test
+# .env.production
 
 # IDEs and editors
 /.idea/
@@ -124,10 +126,10 @@ Thumbs.db
 .idea/
 
 # Local development files
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# .env.local
+# .env.development.local
+# .env.test.local
+# .env.production.local
 
 # Logs
 logs/
