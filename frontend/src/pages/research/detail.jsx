@@ -44,6 +44,13 @@ const ResearchDetailPage = () => {
   const researchResult =
     research.result || "No result text found for this research.";
 
+  const sanitizeBreaks = (text) => {
+    if (!text) return text;
+    return text
+      .replace(/<br\s*\/?>\s*<br\s*\/?>/gi, "\n\n")
+      .replace(/<br\s*\/?>/gi, "\n");
+  };
+
   return (
     <div className="page-content p-5">
       <div
@@ -69,7 +76,7 @@ const ResearchDetailPage = () => {
         ref={resultRef}
       >
         <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {researchResult}
+          {sanitizeBreaks(researchResult)}
         </ReactMarkdown>
       </div>
     </div>

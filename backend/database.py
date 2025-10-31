@@ -203,6 +203,203 @@ async def initialize_research_db():
         ''')
         await db.commit()
 
+async def initialize_research_jobs_db():
+    """Initializes tables for research jobs, drafts, and logs."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS research_jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query TEXT NOT NULL,
+                server_name TEXT,
+                model_name TEXT,
+                server_type TEXT,
+                target_count INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                accepted_count INTEGER DEFAULT 0,
+                research_id INTEGER,
+                drafts_count INTEGER DEFAULT 0,
+                errors_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP NOT NULL,
+                started_at TIMESTAMP,
+                finished_at TIMESTAMP
+            )
+        ''')
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS research_drafts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                title TEXT,
+                summary TEXT,
+                date TEXT,
+                targets TEXT,
+                method TEXT,
+                exploit_used TEXT,
+                relevance TEXT,
+                source_url TEXT,
+                canonical_url TEXT,
+                title_key TEXT,
+                content_hash TEXT,
+                markdown_snippet TEXT,
+                qa_status TEXT,
+                qa_message TEXT,
+                link_ok INTEGER DEFAULT 0,
+                is_duplicate INTEGER DEFAULT 0,
+                created_at TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP NOT NULL,
+                FOREIGN KEY (job_id) REFERENCES research_jobs(id) ON DELETE CASCADE
+            )
+        ''')
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS research_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                ts TIMESTAMP NOT NULL,
+                level TEXT NOT NULL,
+                message TEXT NOT NULL,
+                FOREIGN KEY (job_id) REFERENCES research_jobs(id) ON DELETE CASCADE
+            )
+        ''')
+        await db.commit()
+
+        # Safe ALTERs for existing DBs
+        # research_jobs: accepted_count, research_id
+        try:
+            async with db.execute("PRAGMA table_info(research_jobs)") as cursor:
+                cols = [row[1] for row in await cursor.fetchall()]
+            if 'accepted_count' not in cols:
+                await db.execute("ALTER TABLE research_jobs ADD COLUMN accepted_count INTEGER DEFAULT 0")
+            if 'research_id' not in cols:
+                await db.execute("ALTER TABLE research_jobs ADD COLUMN research_id INTEGER")
+        except Exception:
+            pass
+        # research_drafts: qa_message, link_ok, is_duplicate
+        try:
+            async with db.execute("PRAGMA table_info(research_drafts)") as cursor:
+                cols = [row[1] for row in await cursor.fetchall()]
+            if 'qa_message' not in cols:
+                await db.execute("ALTER TABLE research_drafts ADD COLUMN qa_message TEXT")
+            if 'link_ok' not in cols:
+                await db.execute("ALTER TABLE research_drafts ADD COLUMN link_ok INTEGER DEFAULT 0")
+            if 'is_duplicate' not in cols:
+                await db.execute("ALTER TABLE research_drafts ADD COLUMN is_duplicate INTEGER DEFAULT 0")
+        except Exception:
+            pass
+        await db.commit()
+
+async def add_research_job(query: str, server_name: str, model_name: str, server_type: str, target_count: int) -> int:
+    now = datetime.utcnow()
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute(
+            '''INSERT INTO research_jobs (query, server_name, model_name, server_type, target_count, status, drafts_count, errors_count, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, 'pending', 0, 0, ?, ?)''',
+            (query, server_name, model_name, server_type, target_count, now, now)
+        )
+        await db.commit()
+        cursor = await db.execute('SELECT last_insert_rowid()')
+        row = await cursor.fetchone()
+        return int(row[0])
+
+async def get_research_job(job_id: int):
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute('SELECT * FROM research_jobs WHERE id = ?', (job_id,)) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+async def update_research_job(job_id: int, **fields):
+    if not fields:
+        return
+    fields['updated_at'] = datetime.utcnow()
+    cols = ', '.join([f"{k} = ?" for k in fields.keys()])
+    vals = list(fields.values()) + [job_id]
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute(f'UPDATE research_jobs SET {cols} WHERE id = ?', vals)
+        await db.commit()
+
+async def increment_research_job_counts(job_id: int, drafts_delta: int = 0, errors_delta: int = 0):
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute(
+            'UPDATE research_jobs SET drafts_count = drafts_count + ?, errors_count = errors_count + ?, updated_at = ? WHERE id = ?',
+            (drafts_delta, errors_delta, datetime.utcnow(), job_id)
+        )
+        await db.commit()
+
+async def add_research_log(job_id: int, level: str, message: str):
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute(
+            'INSERT INTO research_logs (job_id, ts, level, message) VALUES (?, ?, ?, ?)',
+            (job_id, datetime.utcnow(), level, message)
+        )
+        await db.commit()
+
+async def get_research_logs_since(job_id: int, last_id: int = 0):
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute('SELECT * FROM research_logs WHERE job_id = ? AND id > ? ORDER BY id ASC', (job_id, last_id)) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+async def add_research_draft(job_id: int, draft: dict) -> int:
+    now = datetime.utcnow()
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute('''
+            INSERT INTO research_drafts (job_id, title, summary, date, targets, method, exploit_used, relevance, source_url, canonical_url, title_key, content_hash, markdown_snippet, qa_status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            job_id,
+            draft.get('title'),
+            draft.get('summary'),
+            draft.get('date'),
+            draft.get('targets'),
+            draft.get('method'),
+            draft.get('exploit_used'),
+            draft.get('relevance'),
+            draft.get('source_url'),
+            draft.get('canonical_url'),
+            draft.get('title_key'),
+            draft.get('content_hash'),
+            draft.get('markdown_snippet'),
+            draft.get('qa_status', 'pending'),
+            now,
+            now
+        ))
+        await db.commit()
+        cursor = await db.execute('SELECT last_insert_rowid()')
+        row = await cursor.fetchone()
+        return int(row[0])
+
+async def list_research_drafts(job_id: int, limit: int = 50, offset: int = 0):
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute('''
+            SELECT id, title, date, qa_status, source_url, created_at
+            FROM research_drafts WHERE job_id = ? ORDER BY id ASC LIMIT ? OFFSET ?
+        ''', (job_id, limit, offset)) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+async def list_research_drafts_full(job_id: int):
+    """Returns all drafts for a job including markdown_snippet and QA fields."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute('''
+            SELECT id, title, date, qa_status, qa_message, source_url, canonical_url, markdown_snippet, created_at
+            FROM research_drafts WHERE job_id = ? ORDER BY id ASC
+        ''', (job_id,)) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+async def update_research_draft(draft_id: int, **fields):
+    if not fields:
+        return
+    fields['updated_at'] = datetime.utcnow()
+    cols = ', '.join([f"{k} = ?" for k in fields.keys()])
+    vals = list(fields.values()) + [draft_id]
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute(f'UPDATE research_drafts SET {cols} WHERE id = ?', vals)
+        await db.commit()
+
 async def add_research(query: str, result: str, generation_time: float, ollama_server_name: str, ollama_model: str):
     """Adds a new research entry to the database."""
     now = datetime.utcnow()
@@ -215,6 +412,9 @@ async def add_research(query: str, result: str, generation_time: float, ollama_s
             (query, result, now, generation_time, ollama_server_name, ollama_model)
         )
         await db.commit()
+        cursor = await db.execute('SELECT last_insert_rowid()')
+        row = await cursor.fetchone()
+        return int(row[0])
 
 async def get_all_research():
     """Retrieve all research entries from the database."""

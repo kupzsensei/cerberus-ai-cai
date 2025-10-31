@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 # main.py
 import os
 import re
+import asyncio
 import httpx
 import logging
 from datetime import datetime
@@ -16,8 +17,10 @@ import utils
 import database
 import research
 import scheduler_service
+import research_pipeline
 
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 ADELAIDE_TZ = pytz.timezone('Australia/Adelaide')
 app = FastAPI()
@@ -45,6 +48,7 @@ async def startup_event():
     await database.initialize_research_db()
     await database.initialize_local_storage_db()
     await database.initialize_email_scheduler_db()
+    await database.initialize_research_jobs_db()
     
     # Start the scheduled research executor
     import asyncio
@@ -221,6 +225,141 @@ async def delete_task_endpoint(task_id: str):
     await database.delete_task(task_id)
 
     return {"message": f"Task '{task_id}' and associated file were successfully deleted."}
+
+# --- Research Job Pipeline ---
+
+@app.post("/research/jobs/start")
+async def start_research_job(
+    query: str = Form(...),
+    server_name: str = Form(...),
+    model_name: str = Form(...),
+    server_type: str = Form(...),
+    target_count: int = Form(...),
+    seed_urls: str = Form(None),
+    focus_on_seed: bool = Form(True)
+):
+    if not query:
+        raise HTTPException(status_code=400, detail="Query is required")
+    if target_count <= 0:
+        raise HTTPException(status_code=400, detail="target_count must be > 0")
+
+    job_id = await database.add_research_job(query, server_name, model_name, server_type, target_count)
+
+    seed_list = None
+    if seed_urls:
+        s = seed_urls.strip()
+        if s:
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, list):
+                    seed_list = [str(u) for u in parsed]
+            except Exception:
+                seed_list = [u.strip() for u in re.split(r"[\r\n\s]+", s) if u.strip()]
+
+    # initialize SSE queue
+    import asyncio as _asyncio
+    research_pipeline.JOB_STREAMS[job_id] = _asyncio.Queue()
+
+    # spawn background task
+    import asyncio
+    asyncio.create_task(research_pipeline.run_research_job(job_id, seed_urls=seed_list, focus_on_seed=focus_on_seed))
+
+    return {"job_id": job_id}
+
+@app.get("/research/jobs/{job_id}")
+async def get_research_job_status(job_id: int):
+    job = await database.get_research_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+@app.get("/research/jobs/{job_id}/drafts")
+async def get_research_job_drafts(job_id: int):
+    job = await database.get_research_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    drafts = await database.list_research_drafts(job_id, limit=200, offset=0)
+    return {"drafts": drafts}
+
+@app.get("/research/jobs/{job_id}/events")
+async def stream_research_job_events(job_id: int):
+    job = await database.get_research_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    async def event_generator():
+        q = research_pipeline.JOB_STREAMS.get(job_id)
+        last_ping = datetime.now()
+        while True:
+            try:
+                # periodic keepalive every 15s
+                now = datetime.now()
+                if (now - last_ping).total_seconds() > 15:
+                    yield f"event: keepalive\ndata: {{}}\n\n"
+                    last_ping = now
+                msg = await asyncio.wait_for(q.get(), timeout=2.0)
+                yield f"data: {json.dumps(msg)}\n\n"
+            except asyncio.TimeoutError:
+                # loop to send keepalives
+                continue
+            except Exception:
+                break
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
+
+@app.post("/research/jobs/{job_id}/cancel")
+async def cancel_research_job(job_id: int):
+    job = await database.get_research_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    await database.update_research_job(job_id, status='canceled')
+    return {"message": "Job canceled"}
+
+def _format_header_range_from_query(q: str) -> str | None:
+    try:
+        rs, re_ = research._parse_date_range_from_query(q)
+        if not rs or not re_:
+            return None
+        from datetime import datetime as _dt
+        sdt = _dt.strptime(rs, "%Y-%m-%d")
+        edt = _dt.strptime(re_, "%Y-%m-%d")
+        months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+        if sdt.year == edt.year:
+            return f"{months[sdt.month-1]} {sdt.day} - {months[edt.month-1]} {edt.day}, {edt.year}"
+        return f"{months[sdt.month-1]} {sdt.day}, {sdt.year} - {months[edt.month-1]} {edt.day}, {edt.year}"
+    except Exception:
+        return None
+
+@app.post("/research/jobs/{job_id}/finalize")
+async def finalize_research_job(job_id: int):
+    job = await database.get_research_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    drafts = await database.list_research_drafts(job_id, limit=1000, offset=0)
+    if not drafts:
+        raise HTTPException(status_code=400, detail="No drafts to finalize")
+    header_range = _format_header_range_from_query(job.get('query') or '')
+    md = []
+    if header_range:
+        md.append(f"# Cyber Threats and Risks ({header_range})\n\n<br><br>\n\n")
+    else:
+        md.append("# Cyber Threats and Risks\n\n<br><br>\n\n")
+    # join snippets in order
+    for i, d in enumerate(drafts, start=1):
+        # ensure index numbering
+        snippet = d.get('markdown_snippet') or ''
+        # Optional: Could renumber, but drafts were built with ordering at save time
+        md.append(snippet)
+    final_text = "".join(md)
+    # Persist in existing research table
+    await database.add_research(job.get('query') or '', final_text, 0.0, job.get('server_name') or '', job.get('model_name') or '')
+    await database.update_research_job(job_id, status='finalized')
+    return {"message": "Finalized", "length": len(final_text)}
 
 @app.post("/research")
 async def research_endpoint(

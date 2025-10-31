@@ -135,6 +135,46 @@ export const deleteResearchById = async (researchId) => {
   return response.data;
 };
 
+// --- New Research Job Pipeline APIs ---
+
+export const startResearchJob = async ({
+  query,
+  serverName,
+  modelName,
+  serverType,
+  targetCount,
+  seedUrls,
+  focusOnSeed = true,
+}) => {
+  const formData = new FormData();
+  formData.append("query", query);
+  formData.append("server_name", serverName);
+  formData.append("model_name", modelName);
+  formData.append("server_type", serverType);
+  formData.append("target_count", String(targetCount));
+  if (seedUrls) formData.append("seed_urls", seedUrls);
+  formData.append("focus_on_seed", String(focusOnSeed));
+  const response = await axios.post(`${API_BASE_URL}/research/jobs/start`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data; // { job_id }
+};
+
+export const getResearchJobStatus = async (jobId) => {
+  const response = await axios.get(`${API_BASE_URL}/research/jobs/${jobId}`);
+  return response.data;
+};
+
+export const getResearchJobDrafts = async (jobId) => {
+  const response = await axios.get(`${API_BASE_URL}/research/jobs/${jobId}/drafts`);
+  return response.data.drafts;
+};
+
+export const cancelResearchJob = async (jobId) => {
+  const response = await axios.post(`${API_BASE_URL}/research/jobs/${jobId}/cancel`);
+  return response.data;
+};
+
 export const getOllamaModels = async (url) => {
   const response = await axios.get(`${API_BASE_URL}/ollama-models?url=${encodeURIComponent(url)}`);
   return response.data;

@@ -9,7 +9,7 @@
     "research_limits": {
         "max_results_to_analyze": 30,
         "max_article_chars": 4000,
-        "target_min_results": 100
+        "target_min_results": 50
     },
     "llm": {
         "num_predict": 384

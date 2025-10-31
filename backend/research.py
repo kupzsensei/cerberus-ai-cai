@@ -816,6 +816,13 @@ def format_raw_results(results, start_count, llm, range_start=None, range_end=No
         except Exception:
             pass
 
+        # Quick prefilter using title + snippet to avoid unnecessary fetch/LLM
+        pre_lc = f"{title} {snippet}".lower()
+        if _is_hard_exclude(title, snippet):
+            continue
+        if any(nk in pre_lc for nk in non_incident_keywords) and not any(kw in pre_lc for kw in incident_keywords):
+            continue
+
         # Try to fetch full page text to improve extraction quality and metadata
         content, raw_html = _fetch_page_content(url, snippet)
 
@@ -1020,7 +1027,7 @@ Article: {content}
             canon_url = (url or "").strip()
         used_urls.add(canon_url.lower())
 
-        # Append section using new style
+        # Append section using new style; include HTML breaks for email, UI will sanitize
         output += f"## {included}. {title}\n\n**{summary}**\n\n{os.linesep.join(details)}\n\n<br><br>\n\n"
     # Backfill in relaxed mode to reach minimum target when strict filtering yields too few items
     if included < MIN_RESULTS_ENFORCED:
