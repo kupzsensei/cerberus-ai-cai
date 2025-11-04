@@ -5,6 +5,7 @@ import re
 import hashlib
 from urllib.parse import urlparse
 from datetime import datetime
+import json
 import database
 import research
 import utils
@@ -72,32 +73,88 @@ def _extract_cves(text: str) -> list[str]:
     except Exception:
         return []
 
-async def _extract_fields_with_llm(llm, content: str) -> dict:
-    prompt = f'''You are a cybersecurity analyst extracting discrete incident details.
-Return EXACTLY these lines:
-Summary: <one sentence>
-Date of Incident: <YYYY-MM-DD or natural date>
-Targets: <entities>
-Method: <one of [Ransomware, Phishing, Data breach, DDoS, Vulnerability exploitation, Supply chain compromise, Credential stuffing, Business email compromise, Vishing, Malware/Backdoor, Espionage]>
-Exploit Used: <CVE IDs and/or exploit mechanism; leave blank if unknown>
-Incident?: <yes/no>
-
-Article: {content}'''
+async def _extract_fields_with_llm(llm, content: str, prompt_template: str | None = None) -> dict:
+    """Ask the LLM for strict JSON and parse it. Fallback to a naive summary on failure."""
+    schema = {
+        "summary": "string",
+        "date": "string",
+        "targets": "string",
+        "method": "string",
+        "exploit_used": "string",
+        "incident": "boolean"
+    }
+    if prompt_template and isinstance(prompt_template, str) and prompt_template.strip():
+        prompt = prompt_template.replace("{ARTICLE}", content)
+    else:
+        prompt = (
+            "You are a cybersecurity analyst focused on incidents impacting Australian businesses.\n"
+            "Return ONLY valid minified JSON with these keys: "
+            "{summary:string,date:string,targets:string,method:string,exploit_used:string,incident:boolean}.\n"
+            "Rules: method must be one of [Ransomware, Phishing, Data breach, DDoS, Vulnerability exploitation, Supply chain compromise, Credential stuffing, Business email compromise, Vishing, Malware/Backdoor, Espionage]. "
+            "Set incident=true only if this article describes an actual cyberattack/breach/exploit/outage affecting an organization, or a high-likelihood threat relevant to Australian businesses. "
+            "Prefer concise, factual summary. Leave unknown fields as empty string. No prose or markdown, JSON only.\n\n"
+            f"Article: {content}"
+        )
     try:
-        data = (await asyncio.get_event_loop().run_in_executor(None, llm.invoke, prompt)).content
-        def grab(label):
-            m = re.search(rf"^{label}:\s*(.*)$", data, re.MULTILINE)
-            return m.group(1).strip() if m else ""
-        return {
-            "summary": grab("Summary"),
-            "date": grab("Date of Incident"),
-            "targets": grab("Targets"),
-            "method": grab("Method"),
-            "exploit_used": grab("Exploit Used"),
-            "incident": (grab("Incident?").lower().startswith("y"))
+        raw = (await asyncio.get_event_loop().run_in_executor(None, llm.invoke, prompt)).content
+        # Trim code fences if present
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?", "", raw).strip()
+            raw = re.sub(r"```$", "", raw).strip()
+        data = json.loads(raw)
+        # Normalize
+        def _norm_method(m: str) -> str:
+            t = (m or "").strip().lower()
+            mapping = {
+                "ransom": "Ransomware",
+                "lockbit": "Ransomware",
+                "double": "Ransomware",
+                "extortion": "Ransomware",
+                "data breach": "Data breach",
+                "breach": "Data breach",
+                "leak": "Data breach",
+                "exfil": "Data breach",
+                "phishing": "Phishing",
+                "credential": "Credential stuffing",
+                "ddos": "DDoS",
+                "denial": "DDoS",
+                "vulnerability": "Vulnerability exploitation",
+                "exploit": "Vulnerability exploitation",
+                "sql": "Vulnerability exploitation",
+                "supply": "Supply chain compromise",
+                "third": "Supply chain compromise",
+                "bec": "Business email compromise",
+                "business email": "Business email compromise",
+                "vishing": "Vishing",
+                "voice": "Vishing",
+                "backdoor": "Malware/Backdoor",
+                "malware": "Malware/Backdoor",
+                "espionage": "Espionage",
+            }
+            for k, v in mapping.items():
+                if k in t:
+                    return v
+            return "" if not t else m
+        out = {
+            "summary": (data.get("summary") or "").strip(),
+            "date": (data.get("date") or "").strip(),
+            "targets": (data.get("targets") or "").strip(),
+            "method": _norm_method(data.get("method") or ""),
+            "exploit_used": (data.get("exploit_used") or "").strip(),
+            "incident": bool(data.get("incident"))
         }
+        return out
     except Exception:
-        return {"summary": content[:600] + ("..." if len(content) > 600 else ""), "date": "", "targets": "", "method": "", "exploit_used": "", "incident": False}
+        # Fallback minimal fields
+        return {
+            "summary": content[:600] + ("..." if len(content) > 600 else ""),
+            "date": "",
+            "targets": "",
+            "method": "",
+            "exploit_used": "",
+            "incident": False,
+        }
 
 def _pretty_date(date_str: str) -> str:
     if not date_str:
@@ -157,12 +214,91 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
         await database.update_research_job(job_id, status='failed', finished_at=datetime.utcnow())
         return
 
-    # Parameters
+    # Parameters (configurable; job overrides config.json)
+    base_cfg = utils.config.get('research_pipeline', {}) if hasattr(utils, 'config') else {}
+    job_cfg = {}
+    try:
+        raw_cfg = job.get('config_json') or '{}'
+        job_cfg = json.loads(raw_cfg)
+    except Exception:
+        job_cfg = {}
     target = int(job['target_count'] or 10)
-    page_size = 30
-    max_candidates = max(100, target * 5)
+    # Search settings
+    page_size = int(job_cfg.get('search', {}).get('page_size', base_cfg.get('page_size', 30)))
+    max_candidates = int(job_cfg.get('search', {}).get('max_candidates', base_cfg.get('max_candidates', max(100, target * 6))))
+    concurrency = int(job_cfg.get('search', {}).get('concurrency', base_cfg.get('concurrency', 6)))
+    focus_tail = job_cfg.get('search', {}).get('focus_query_tail', ' (ransomware OR "data breach" OR breach OR cyberattack OR exploit OR vulnerability OR malware OR "zero-day" OR CVE)')
+    use_serpapi = bool(job_cfg.get('search', {}).get('use_serpapi', True))
+    use_tavily = bool(job_cfg.get('search', {}).get('use_tavily', True))
+    # Scoring/filters
+    min_score = float(job_cfg.get('scoring', {}).get('min_score', base_cfg.get('min_score', 3.0)))
+    incident_kw_cfg = job_cfg.get('scoring', {}).get('incident_keywords')
+    aggregator_kw_cfg = job_cfg.get('filters', {}).get('aggregator_keywords')
+    require_incident = bool(job_cfg.get('filters', {}).get('require_incident', True))
+    # Default to Australian focus if not specified in config
+    require_au = bool(job_cfg.get('filters', {}).get('require_au', True))
+    # Domains
+    include_domains_override = job_cfg.get('domains', {}).get('include') if isinstance(job_cfg.get('domains', {}), dict) else None
+    include_domains = include_domains_override if include_domains_override else research.include_domains
     seen: set[str] = set()
     total_seen = 0
+
+    # Simple in-memory fetch cache per job
+    _page_cache: dict[str, tuple[str, str | None]] = {}
+    def _cache_get(url: str):
+        key = _canon_url(url).lower()
+        return _page_cache.get(key)
+    def _cache_put(url: str, value: tuple[str, str | None]):
+        if len(_page_cache) > 256:
+            # drop an arbitrary key (LRU not necessary here)
+            _page_cache.pop(next(iter(_page_cache)))
+        _page_cache[_canon_url(url).lower()] = value
+
+    # Keyword sets
+    incident_kw = tuple(incident_kw_cfg) if isinstance(incident_kw_cfg, list) else (
+        "ransomware","data breach","breach","cyberattack","attack","exploit",
+        "vulnerability","malware","ddos","zero-day","cve-"
+    )
+    aggregator_kw = tuple(aggregator_kw_cfg) if isinstance(aggregator_kw_cfg, list) else (
+        "op-ed","opinion","analysis","weekly","monthly","annual","roundup","digest",
+        "newsletter","webinar","podcast","press release","press-release","what we know",
+        "explainer","guide","landscape","overview","predictions","trends","report"
+    )
+
+    def _is_low_signal(text: str) -> bool:
+        tl = (text or "").lower()
+        return any(k in tl for k in aggregator_kw)
+
+    def _score_candidate(title: str, text: str, url: str) -> float:
+        score = 0.0
+        tl = f"{title} {text}".lower()
+        # Regional signals
+        try:
+            netloc = urlparse(url).netloc.lower()
+        except Exception:
+            netloc = ""
+        if any(d in (url or "") for d in include_domains):
+            score += 2.5
+        if netloc.endswith('.au'):
+            score += 2.0
+        if ("australia" in tl) or ("australian" in tl):
+            score += 2.0
+        # Business/organization signals
+        if any(k in tl for k in [
+            "business","businesses","company","companies","organisation","organization",
+            "enterprise","sector","industry","sme","smb"
+        ]):
+            score += 1.0
+        # Incident keyword boost
+        hits = sum(1 for k in incident_kw if k in tl)
+        score += min(3.0, 0.7 * hits)
+        # CVE presence boost
+        if re.search(r"\bCVE-\d{4}-\d{4,7}\b", tl):
+            score += 2.0
+        # Penalize obvious aggregator/opinion
+        if _is_low_signal(tl):
+            score -= 2.0
+        return score
 
     # Helpers
     async def fetch_page(page_index: int) -> list[dict]:
@@ -173,21 +309,22 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
             extra["tbs"] = f"cdr:1,cd_min:{s},cd_max:{e}"
         # Focus query on cyber attacks / exploits / breaches
         base_q = job['query']
-        focus_tail = ' (ransomware OR "data breach" OR breach OR cyberattack OR exploit OR vulnerability OR malware OR "zero-day" OR CVE)'
         fq = base_q + focus_tail
-        # SerpAPI one page (30)
-        try:
-            serp_extra = dict(extra); serp_extra['start'] = page_index * page_size
-            sr = await asyncio.get_event_loop().run_in_executor(None, research._search_serpapi, fq, page_size, 'au', 'en', serp_extra)
-            results.extend(sr.get('results', []))
-        except Exception:
-            await _push_log(job_id, 'warning', f"SERPAPI page {page_index} failed")
-        # Tavily fallback page (30)
-        try:
-            tr = await asyncio.get_event_loop().run_in_executor(None, research._search_tavily, fq, page_size, research.include_domains)
-            results.extend(tr.get('results', []))
-        except Exception:
-            pass
+        # SerpAPI page
+        if use_serpapi and getattr(research, 'serpapi_api_key', None):
+            try:
+                serp_extra = dict(extra); serp_extra['start'] = page_index * page_size
+                sr = await asyncio.get_event_loop().run_in_executor(None, research._search_serpapi, fq, page_size, 'au', 'en', serp_extra)
+                results.extend(sr.get('results', []))
+            except Exception:
+                await _push_log(job_id, 'warning', f"SERPAPI page {page_index} failed")
+        # Tavily page
+        if use_tavily and getattr(research, 'tavily_api_key', None):
+            try:
+                tr = await asyncio.get_event_loop().run_in_executor(None, research._search_tavily, fq, page_size, include_domains)
+                results.extend(tr.get('results', []))
+            except Exception:
+                pass
         return results
 
     async def process_candidate(url: str, title_hint: str = '') -> bool:
@@ -204,12 +341,26 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
         if int(cur.get('accepted_count') or 0) >= target:
             return False
         await _push_log(job_id, 'info', f"Fetching: {url}")
-        text, html = await _http_get_text(url)
+        cached = _cache_get(url)
+        if cached is not None:
+            text, html = cached
+        else:
+            text, html = await _http_get_text(url)
+            _cache_put(url, (text, html))
         if not text:
             await _push_log(job_id, 'warning', f"Failed to fetch: {url}")
             await database.increment_research_job_counts(job_id, errors_delta=1)
             return False
-        fields = await _extract_fields_with_llm(llm, text)
+        # Low-signal early filter
+        if _is_low_signal(f"{title_hint} {text}"):
+            await _push_log(job_id, 'info', f"filtered_low_signal: {url}")
+            return False
+        extraction_prompt = None
+        try:
+            extraction_prompt = job_cfg.get('extraction', {}).get('prompt') if isinstance(job_cfg.get('extraction'), dict) else None
+        except Exception:
+            extraction_prompt = None
+        fields = await _extract_fields_with_llm(llm, text, prompt_template=extraction_prompt)
         title = title_hint or 'Untitled Incident'
         summary = fields.get('summary', '').strip()
         date = _pretty_date(fields.get('date', '').strip())
@@ -232,10 +383,20 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
             rel = "Global incident impacting widely used platforms; likely to affect Australian businesses."
         # Incident keyword presence (filter to attacks/exploits/breaches)
         content_lc = f"{title} {text}".lower()
-        incident_kw = ("ransomware","data breach","breach","cyberattack","attack","exploit","vulnerability","malware","ddos","zero-day","cve-")
         if not any(k in content_lc for k in incident_kw):
             await _push_log(job_id, 'info', f"filtered_non_incident: {url}")
             return False
+
+        # Scoring & gating
+        score = _score_candidate(title, text, url)
+        if require_au and not ("australia" in content_lc or ".au" in (url or '').lower() or "australian" in content_lc):
+            await _push_log(job_id, 'info', f"filtered_non_au: {url}")
+            qa_ok = False
+        elif score < min_score or (require_incident and (fields and not fields.get('incident'))):
+            await _push_log(job_id, 'info', f"filtered_low_score: {url} score={score:.1f}")
+            qa_ok = False
+        else:
+            qa_ok = True
 
         # Duplicate check within job
         dupe = False
@@ -245,7 +406,7 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
                 dupe = True
         except Exception:
             dupe = False
-        qa_ok = (not dupe) and bool(summary) and bool(url)
+        qa_ok = qa_ok and (not dupe) and bool(summary) and bool(url)
         acc = int((await database.get_research_job(job_id)).get('accepted_count') or 0)
         idx = acc + 1
         snippet = _build_markdown_snippet(idx, title, summary, date, targets, method, exploit_used, rel, url)
@@ -263,7 +424,7 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
             'content_hash': _content_hash(text[:5000]),
             'markdown_snippet': snippet,
             'qa_status': 'ok' if qa_ok else 'failed',
-            'qa_message': '' if qa_ok else 'duplicate or insufficient content',
+            'qa_message': '' if qa_ok else 'low score/duplicate/insufficient content',
             'link_ok': 1,
             'is_duplicate': 1 if dupe else 0,
         })
@@ -289,6 +450,7 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
 
     # Paginated search rounds (30 per page)
     page_index = 0
+    sem = asyncio.Semaphore(concurrency)
     while True:
         cur = await database.get_research_job(job_id)
         if not cur or cur.get('status') in ('canceled','failed','finalized','finalizing'):
@@ -303,13 +465,19 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
         await _push_log(job_id, 'info', f"candidates_found: {len(page)}")
         if not page:
             break
+        tasks = []
+        async def _run(url: str, title: str):
+            async with sem:
+                cur2 = await database.get_research_job(job_id)
+                if int(cur2.get('accepted_count') or 0) >= target:
+                    return
+                await process_candidate(url, title)
         for it in page:
             url = it.get('url') or ''
             title = it.get('title') or 'Untitled Incident'
-            cur = await database.get_research_job(job_id)
-            if int(cur.get('accepted_count') or 0) >= target:
-                break
-            await process_candidate(url, title)
+            tasks.append(asyncio.create_task(_run(url, title)))
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         page_index += 1
 
     # Auto-finalize
@@ -328,8 +496,28 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
     except Exception:
         header_range = None
     md_parts = []
-    md_parts.append(f"# Cyber Threats and Risks ({header_range})\n\n<br><br>\n\n" if header_range else "# Cyber Threats and Risks\n\n<br><br>\n\n")
+    md_parts.append(f"# Cyber Threats and Risks ({header_range})\n\n" if header_range else "# Cyber Threats and Risks\n\n")
+    # Build summary section
     ok = [d for d in drafts if d.get('qa_status')=='ok']
+    total_ok = len(ok)
+    by_method: dict[str,int] = {}
+    cve_set: set[str] = set()
+    for d in ok:
+        m = (d.get('method') or '').strip() or 'Not specified'
+        by_method[m] = by_method.get(m, 0) + 1
+        cves = _extract_cves(" ".join([d.get('exploit_used') or '', d.get('summary') or '']))
+        for c in cves:
+            cve_set.add(c)
+    # Format summary bullets
+    md_parts.append("## At-a-Glance Summary\n\n")
+    md_parts.append(f"- Incidents: {total_ok}\n")
+    if by_method:
+        meth_line = ", ".join([f"{k}: {v}" for k, v in sorted(by_method.items(), key=lambda x: (-x[1], x[0]))])
+        md_parts.append(f"- Methods: {meth_line}\n")
+    if cve_set:
+        md_parts.append(f"- Top CVEs: {', '.join(sorted(cve_set))}\n")
+    md_parts.append("\n<br><br>\n\n")
+    # Append incidents
     for i, d in enumerate(ok, start=1):
         sn = d.get('markdown_snippet') or ''
         sn = re.sub(r"^##\s*\d+\.", f"## {i}.", sn, flags=re.MULTILINE)

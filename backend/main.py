@@ -236,14 +236,23 @@ async def start_research_job(
     server_type: str = Form(...),
     target_count: int = Form(...),
     seed_urls: str = Form(None),
-    focus_on_seed: bool = Form(True)
+    focus_on_seed: bool = Form(True),
+    config: str = Form(None)
 ):
     if not query:
         raise HTTPException(status_code=400, detail="Query is required")
     if target_count <= 0:
         raise HTTPException(status_code=400, detail="target_count must be > 0")
 
-    job_id = await database.add_research_job(query, server_name, model_name, server_type, target_count)
+    # parse optional config JSON
+    job_config = None
+    if config:
+        try:
+            job_config = json.loads(config)
+        except Exception:
+            job_config = None
+
+    job_id = await database.add_research_job(query, server_name, model_name, server_type, target_count, config=job_config)
 
     seed_list = None
     if seed_urls:
@@ -367,15 +376,17 @@ async def research_endpoint(
     server_name: str = Form(...),
     model_name: str = Form(...),
     server_type: str = Form(...),
+    target_count: int = Form(10),
     seed_urls: str = Form(None),
-    focus_on_seed: bool = Form(True)
+    focus_on_seed: bool = Form(True),
+    config: str = Form(None)
 ):
     """
-    Performs a research query and returns the results.
+    Performs a research query using the pipeline and returns the finalized report.
     """
     if not query:
         raise HTTPException(status_code=400, detail="A query is required.")
-    
+
     # Parse optional seed URLs: JSON array or newline-separated
     seed_list = None
     if seed_urls:
@@ -389,12 +400,33 @@ async def research_endpoint(
                 # Fallback: newline/space separated
                 seed_list = [u.strip() for u in re.split(r"[\r\n\s]+", s) if u.strip()]
 
-    result, generation_time = await research.perform_search(
-        query, server_name, model_name, server_type,
-        seed_urls=seed_list, focus_on_seed=focus_on_seed
-    )
-    
-    return {"result": result, "generation_time": generation_time}
+    # Parse optional config JSON
+    job_config = None
+    if config:
+        try:
+            job_config = json.loads(config)
+        except Exception:
+            job_config = None
+
+    # Create job and run to completion using the pipeline
+    import time as _time
+    t0 = _time.time()
+    job_id = await database.add_research_job(query, server_name, model_name, server_type, int(target_count or 10), config=job_config)
+    # initialize SSE queue for consistency (not used here)
+    import asyncio as _asyncio
+    research_pipeline.JOB_STREAMS[job_id] = _asyncio.Queue()
+    await research_pipeline.run_research_job(job_id, seed_urls=seed_list, focus_on_seed=focus_on_seed)
+    job = await database.get_research_job(job_id)
+    final_text = ""
+    if job and job.get('status') == 'finalized' and job.get('research_id'):
+        r = await database.get_research_by_id(int(job['research_id']))
+        if r and r.get('result'):
+            final_text = r['result']
+    t1 = _time.time()
+    generation_time = t1 - t0
+    if not final_text:
+        final_text = "No finalized report produced. Adjust filters or try again."
+    return {"result": final_text, "generation_time": generation_time}
 
 @app.get("/ollama-servers")
 async def get_ollama_servers_endpoint():
@@ -1084,8 +1116,8 @@ async def perform_test_scheduled_research(
     try:
         from datetime import timedelta
         import pytz
-        from research import perform_search
         import email_service
+        import research_pipeline
         
         ADELAIDE_TZ = pytz.timezone('Australia/Adelaide')
         
@@ -1125,11 +1157,19 @@ async def perform_test_scheduled_research(
         # Create query
         query = f"cybersecurity incidents in Australia from {start_date_str} to {end_date_str}"
         
-        # Perform research
-        result, generation_time = await perform_search(
-            query, server_name, model_name, server_type
-        )
-        
+        # Run the improved pipeline to completion with default target count
+        try:
+            target_count = int(utils.config.get('research_pipeline', {}).get('scheduled_target_count', 10))
+        except Exception:
+            target_count = 10
+        job_id = await database.add_research_job(query, server_name, model_name, server_type, target_count)
+        await research_pipeline.run_research_job(job_id, seed_urls=None, focus_on_seed=True)
+        job = await database.get_research_job(job_id)
+        result = None
+        if job and job.get('status') == 'finalized' and job.get('research_id'):
+            r = await database.get_research_by_id(int(job['research_id']))
+            if r and r.get('result'):
+                result = r['result']
         if not result:
             logging.error("No research results found for the specified date range")
             return {"status": "failed", "task_id": task_id, "error": "No research results found for the specified date range"}

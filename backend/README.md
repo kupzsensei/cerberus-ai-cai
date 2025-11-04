@@ -161,7 +161,7 @@ curl -X POST "[http://127.0.0.1:8000/pdfprofessor](http://127.0.0.1:8000/pdfprof
 - **URL**: `/research`
 - **Method**: `POST`
 - **Form Data**:
-  - `query (string, required): The research query.`
+ - `query (string, required): The research query.`
 - **Response**: A JSON object containing the research results.
 
 ```json
@@ -182,3 +182,15 @@ curl -X POST "[http://127.0.0.1:8000/pdfprofessor](http://127.0.0.1:8000/pdfprof
 - **Clear Documentation:** The updated `README.md` now correctly informs users about the crucial Tesseract dependency, preventing setup failures.
 
 Your application is now significantly more powerful and versatile.
+
+## Research Pipeline Tuning
+
+The draft-first research pipeline powers `/research/jobs/*` and scheduled research. It now supports relevance scoring, stricter incident extraction, and a summary section in final reports. You can tune behavior via `backend/config.json` under `research_pipeline`:
+
+- `page_size` (default 30): Search page size per pass.
+- `max_candidates` (default 150): Upper bound of candidates to consider.
+- `min_score` (default 3.0): Minimum relevance score to accept an incident.
+- `concurrency` (default 6): Parallel fetch/analysis concurrency per page.
+- `scheduled_target_count` (default 10): Target incidents when run by the scheduler.
+
+Scoring favors Australian relevance (.au TLD, AU mentions), curated domains, incident keywords, and CVE presence; it downranks obvious aggregators/opinion pieces.

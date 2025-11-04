@@ -19,5 +19,11 @@
     },
     "scheduler": {
         "jitter_seconds_max": 60
+    },
+    "research_pipeline": {
+        "page_size": 30,
+        "max_candidates": 150,
+        "min_score": 3.0,
+        "concurrency": 6
     }
 }

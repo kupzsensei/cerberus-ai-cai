@@ -145,6 +145,11 @@ export default function Sidebar({ selectedOllamaServer, setSelectedOllamaServer,
                             : "text-green-700 hover:text-green-500 font-bold   drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2"}>
                             Research List
                         </NavLink>
+                        <NavLink to={'/research/settings'} className={({ isActive }) => isActive ?
+                            "text-green-500 font-bold text-xl  drop-shadow-green-600 drop-shadow-md border-green-500 border  hover:border p-2"
+                            : "text-green-700 hover:text-green-500 font-bold   drop-shadow-green-600 drop-shadow-md border-green-500 hover:border p-2"}>
+                            Research Settings
+                        </NavLink>
                     </div>
                     <div className="flex flex-col">
                         <span className="text-green-800  text-xs  drop-shadow-green-600 drop-shadow-md border-green-500 ">

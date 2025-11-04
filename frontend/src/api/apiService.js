@@ -145,6 +145,7 @@ export const startResearchJob = async ({
   targetCount,
   seedUrls,
   focusOnSeed = true,
+  config,
 }) => {
   const formData = new FormData();
   formData.append("query", query);
@@ -154,6 +155,12 @@ export const startResearchJob = async ({
   formData.append("target_count", String(targetCount));
   if (seedUrls) formData.append("seed_urls", seedUrls);
   formData.append("focus_on_seed", String(focusOnSeed));
+  if (config) {
+    try {
+      const cfgStr = typeof config === 'string' ? config : JSON.stringify(config);
+      formData.append('config', cfgStr);
+    } catch {}
+  }
   const response = await axios.post(`${API_BASE_URL}/research/jobs/start`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });

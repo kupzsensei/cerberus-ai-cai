@@ -219,6 +219,7 @@ async def initialize_research_jobs_db():
                 research_id INTEGER,
                 drafts_count INTEGER DEFAULT 0,
                 errors_count INTEGER DEFAULT 0,
+                config_json TEXT,
                 created_at TIMESTAMP NOT NULL,
                 updated_at TIMESTAMP NOT NULL,
                 started_at TIMESTAMP,
@@ -263,7 +264,7 @@ async def initialize_research_jobs_db():
         await db.commit()
 
         # Safe ALTERs for existing DBs
-        # research_jobs: accepted_count, research_id
+        # research_jobs: accepted_count, research_id, config_json
         try:
             async with db.execute("PRAGMA table_info(research_jobs)") as cursor:
                 cols = [row[1] for row in await cursor.fetchall()]
@@ -271,6 +272,8 @@ async def initialize_research_jobs_db():
                 await db.execute("ALTER TABLE research_jobs ADD COLUMN accepted_count INTEGER DEFAULT 0")
             if 'research_id' not in cols:
                 await db.execute("ALTER TABLE research_jobs ADD COLUMN research_id INTEGER")
+            if 'config_json' not in cols:
+                await db.execute("ALTER TABLE research_jobs ADD COLUMN config_json TEXT")
         except Exception:
             pass
         # research_drafts: qa_message, link_ok, is_duplicate
@@ -287,13 +290,24 @@ async def initialize_research_jobs_db():
             pass
         await db.commit()
 
-async def add_research_job(query: str, server_name: str, model_name: str, server_type: str, target_count: int) -> int:
+        # Helpful indexes for faster lookups and dedupe checks
+        try:
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_research_drafts_job_id ON research_drafts(job_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_research_drafts_canonical_url ON research_drafts(canonical_url)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_research_drafts_title_key ON research_drafts(title_key)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_research_logs_job_id ON research_logs(job_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_research_jobs_status ON research_jobs(status)")
+        except Exception:
+            pass
+        await db.commit()
+
+async def add_research_job(query: str, server_name: str, model_name: str, server_type: str, target_count: int, config: dict | None = None) -> int:
     now = datetime.utcnow()
     async with aiosqlite.connect(DATABASE_FILE) as db:
         await db.execute(
-            '''INSERT INTO research_jobs (query, server_name, model_name, server_type, target_count, status, drafts_count, errors_count, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, 'pending', 0, 0, ?, ?)''',
-            (query, server_name, model_name, server_type, target_count, now, now)
+            '''INSERT INTO research_jobs (query, server_name, model_name, server_type, target_count, status, drafts_count, errors_count, config_json, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, 'pending', 0, 0, ?, ?, ?)''',
+            (query, server_name, model_name, server_type, target_count, json.dumps(config or {}), now, now)
         )
         await db.commit()
         cursor = await db.execute('SELECT last_insert_rowid()')

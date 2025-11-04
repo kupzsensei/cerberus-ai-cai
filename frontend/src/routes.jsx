@@ -5,6 +5,7 @@ import UploadPage from "./pages/pdf-professor/analyze-pdf";
 import StatusPage from "./pages/pdf-professor/StatusPage";
 import ResultPage from "./pages/pdf-professor/ResultPage";
 import ResearchPage from "./pages/research";
+import ResearchSettingsPage from "./pages/research/settings.jsx";
 import ResearchListPage from "./pages/research/list";
 import ResearchDetailPage from "./pages/research/detail";
 import InvestigatePage from "./pages/investigate";
@@ -41,6 +42,10 @@ export const router = createBrowserRouter([
         path: "/threats-and-risks",
         element: <ThreatsAndRisksPage />,
         // element: <ResearchPage />,
+      },
+      {
+        path: "/research/settings",
+        element: <ResearchSettingsPage />,
       },
       {
         path: "/research/list",

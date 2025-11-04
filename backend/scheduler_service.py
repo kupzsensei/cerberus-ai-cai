@@ -6,6 +6,7 @@ import pytz
 from typing import List
 import database
 import research
+import research_pipeline
 import email_service
 import utils
 
@@ -183,18 +184,27 @@ class ScheduledResearchExecutor:
                     if servers:
                         server_name = servers[0]['name']
             
-            # Perform research
-            result, generation_time = await research.perform_search(
-                query, server_name, model_name, server_type
-            )
-            
-            if result:
+            # Run improved research pipeline job and wait for completion
+            try:
+                target_count = int(utils.config.get('research_pipeline', {}).get('scheduled_target_count', 10))
+            except Exception:
+                target_count = 10
+            job_id = await database.add_research_job(query, server_name, model_name, server_type, target_count)
+            await research_pipeline.run_research_job(job_id, seed_urls=None, focus_on_seed=True)
+            job = await database.get_research_job(job_id)
+            result_text = None
+            if job and job.get('status') == 'finalized' and job.get('research_id'):
+                r = await database.get_research_by_id(int(job['research_id']))
+                if r and r.get('result'):
+                    result_text = r['result']
+
+            if result_text:
                 # Send email with results and email_config_id if provided
                 email_config_id = research_config.get('email_config_id')
                 success = await email_service.send_scheduled_research_email(
-                    research_config, 
-                    result, 
-                    None, 
+                    research_config,
+                    result_text,
+                    None,
                     email_config_id,
                     date_range_start=start_date_str,
                     date_range_end=end_date_str

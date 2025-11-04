@@ -1,15 +1,11 @@
-import React, { useState } from "react";
-import { researchByDate, startResearchJob, getResearchJobStatus, getResearchJobDrafts, cancelResearchJob } from "../../api/apiService";
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import React, { useEffect, useState } from "react";
+import { startResearchJob, getResearchJobStatus, getResearchJobDrafts, cancelResearchJob } from "../../api/apiService";
 import { useOutletContext, Link } from "react-router-dom";
 
 const ResearchPage = () => {
   const { selectedOllamaServer, selectedModel } = useOutletContext();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [response, setResponse] = useState(null);
   const [error, setError] = useState("");
   const [targetCount, setTargetCount] = useState(10);
   const [seedUrls, setSeedUrls] = useState("");
@@ -18,38 +14,27 @@ const ResearchPage = () => {
   const [drafts, setDrafts] = useState([]);
   const [logs, setLogs] = useState([]);
   const [running, setRunning] = useState(false);
-
-  const sanitizeBreaks = (text) => {
-    if (!text) return text;
-    return text
-      .replace(/<br\s*\/?>\s*<br\s*\/?>/gi, "\n\n")
-      .replace(/<br\s*\/?>/gi, "\n");
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!startDate || !endDate || !selectedOllamaServer || !selectedModel) {
-      setError("Please select both start and end dates, and ensure a server and model are selected.");
-      return;
-    }
-    setIsLoading(true);
-    setResponse(null);
-    setError("");
+  // Load pipeline settings from localStorage (set by settings page)
+  const [config, setConfig] = useState(null);
+  useEffect(() => {
     try {
-      const query = `cybersecurity incidents in Australia from ${startDate} to ${endDate}`;
-      const formData = new FormData();
-      formData.append("query", query);
-      formData.append("server_name", selectedOllamaServer.name);
-      formData.append("model_name", selectedModel);
-      formData.append("server_type", selectedOllamaServer.type);
-      const result = await researchByDate(formData);
-      setResponse(result);
-    } catch (err) {
-      setError(err.response?.data?.detail || err.message || "An unknown error occurred.");
-    } finally {
-      setIsLoading(false);
-    }
+      const saved = localStorage.getItem('researchPipelineConfig');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setConfig(parsed);
+        if (parsed?.ui?.default_target_count != null) {
+          setTargetCount(Number(parsed.ui.default_target_count) || 10);
+        }
+      }
+    } catch {}
+  }, []);
+
+  const buildQuery = () => {
+    const tpl = config?.ui?.query_template || 'cybersecurity incidents in Australia from {START_DATE} to {END_DATE}';
+    return tpl.replace('{START_DATE}', startDate || '').replace('{END_DATE}', endDate || '');
   };
+
+  
 
   const startPipeline = async (e) => {
     e.preventDefault();
@@ -63,7 +48,9 @@ const ResearchPage = () => {
     setJobId(null);
     setRunning(true);
     try {
-      const query = `cybersecurity incidents in Australia from ${startDate} to ${endDate}`;
+      const query = buildQuery();
+      // Use saved config if present
+      const cfg = config || undefined;
       const payload = {
         query,
         serverName: selectedOllamaServer.name,
@@ -72,6 +59,7 @@ const ResearchPage = () => {
         targetCount,
         seedUrls: seedUrls && seedUrls.trim().length > 0 ? seedUrls : undefined,
         focusOnSeed: seedUrls && seedUrls.trim().length > 0 ? true : false,
+        config: cfg,
       };
       const { job_id } = await startResearchJob(payload);
       setJobId(job_id);
@@ -103,39 +91,28 @@ const ResearchPage = () => {
   return (
     <div className="page-content p-5">
       <h1 className="text-2xl font-bold mb-4">Cybersecurity Research</h1>
-      <p className="text-gray-300 mb-6">Select a date range to search for cybersecurity threats and risks.</p>
+      <p className="text-gray-300 mb-6">Select a date range and run the pipeline to draft and finalize a report.</p>
+      {error && <div className="error-message text-red-500 mb-4">{error}</div>}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="prompt-area">
-          <label htmlFor="startDate" className="block text-lg font-medium text-white mb-2">Start Date</label>
-          <input type="date" id="startDate" className="w-full p-3 border border-green-600 rounded-md text-white bg-green-500/20"
-            value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+      <div className="border-t border-green-800 pt-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold mb-3">Research Pipeline</h2>
+          <Link to="/research/settings" className="px-3 py-1 border border-green-500 text-green-500 rounded hover:bg-green-500 hover:text-white">Settings</Link>
         </div>
-        <div className="prompt-area">
-          <label htmlFor="endDate" className="block text-lg font-medium text-white mb-2">End Date</label>
-          <input type="date" id="endDate" className="w-full p-3 border border-green-600 rounded-md text-white bg-green-500/20"
-            value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-        </div>
-        <button type="submit" className="w-full px-4 py-2 border border-green-500 text-green-500 rounded-md hover:bg-green-500 hover:text-white"
-          disabled={isLoading || !startDate || !endDate || !selectedOllamaServer}>
-          {isLoading ? "Researching..." : "Start Research"}
-        </button>
-      </form>
-
-      {error && <div className="error-message text-red-500 mt-4">{error}</div>}
-
-      {response && response.result && (
-        <div className="response-area mt-4 p-4 bg-gray-800 rounded-lg shadow">
-          <h3 className="text-lg font-semibold text-white mb-2">Research Results</h3>
-          <ReactMarkdown remarkPlugins={[remarkGfm]} className="prose prose-invert max-w-none">
-            {sanitizeBreaks(response.result)}
-          </ReactMarkdown>
-        </div>
-      )}
-
-      <div className="mt-10 border-t border-green-800 pt-6">
-        <h2 className="text-xl font-semibold mb-3">New Research Pipeline (Draft-first)</h2>
         <form onSubmit={startPipeline} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="prompt-area">
+              <label htmlFor="startDate" className="block text-sm text-green-300 mb-1">Start Date</label>
+              <input type="date" id="startDate" className="w-full p-2 border border-green-600 rounded-md text-white bg-green-500/20"
+                value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </div>
+            <div className="prompt-area">
+              <label htmlFor="endDate" className="block text-sm text-green-300 mb-1">End Date</label>
+              <input type="date" id="endDate" className="w-full p-2 border border-green-600 rounded-md text-white bg-green-500/20"
+                value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="text-xs text-gray-400">Query preview: <span className="text-gray-300">{buildQuery()}</span></div>
           <div>
                         <label className="block text-sm text-green-300 mb-1">Result Count</label>
             <input type="number" min={1} max={100} value={targetCount} onChange={(e)=>setTargetCount(parseInt(e.target.value||'0'))}
@@ -146,6 +123,7 @@ const ResearchPage = () => {
             <textarea value={seedUrls} onChange={(e)=>setSeedUrls(e.target.value)} rows={4}
               className="w-full p-2 border border-green-600 rounded-md text-white bg-green-500/20" placeholder="https://...\nhttps://..." />
           </div>
+          {/* Settings moved to separate page */}
           <button type="submit" disabled={running}
             className="px-4 py-2 border border-green-500 text-green-500 rounded-md hover:bg-green-500 hover:text-white">
             {running ? 'Running...' : 'Start Pipeline'}
