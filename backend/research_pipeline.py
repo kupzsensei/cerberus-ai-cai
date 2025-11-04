@@ -185,7 +185,8 @@ def _build_markdown_snippet(idx: int, title: str, summary: str, date: str, targe
     if relevance:
         lines.append(f"- Relevance: {relevance}\n")
     if source_url:
-        lines.append(f"- Source: {source_url}\n")
+        # Render source as a Markdown link to match desired style
+        lines.append(f"- Source: [{title}]({source_url})\n")
     lines.append("\n<br><br>\n\n")
     return "\n".join(lines)
 
@@ -237,6 +238,22 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
     require_incident = bool(job_cfg.get('filters', {}).get('require_incident', True))
     # Default to Australian focus if not specified in config
     require_au = bool(job_cfg.get('filters', {}).get('require_au', True))
+    # QA controls
+    qa_prompt = ''
+    qa_enabled = True
+    try:
+        qa_section = (job_cfg.get('qa', {}) or {})
+        qa_prompt = (qa_section.get('prompt', '') or '')
+        qa_enabled = bool(qa_section.get('enabled', True))
+    except Exception:
+        qa_prompt = ''
+        qa_enabled = True
+    # If QA disabled or prompt contains 'accept all', relax gating to avoid burning credits
+    accept_all = (not qa_enabled) or bool(re.search(r"accept\s*all", qa_prompt, flags=re.IGNORECASE)) or bool(re.search(r"accept-?all\s*:\s*true", qa_prompt, flags=re.IGNORECASE))
+    if accept_all:
+        require_incident = False
+        require_au = False
+        min_score = 0.0
     # Domains
     include_domains_override = job_cfg.get('domains', {}).get('include') if isinstance(job_cfg.get('domains', {}), dict) else None
     include_domains = include_domains_override if include_domains_override else research.include_domains
@@ -267,6 +284,8 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
 
     def _is_low_signal(text: str) -> bool:
         tl = (text or "").lower()
+        if accept_all:
+            return False
         return any(k in tl for k in aggregator_kw)
 
     def _score_candidate(title: str, text: str, url: str) -> float:
@@ -377,22 +396,29 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
                 exploit_used = ", ".join(filter(None, [exploit_used] + extra_c)).strip(', ')
         # Relevance
         tl = f"{title} {text}".lower(); rel = ""
-        if any(k in tl for k in ["australia", ".au", "australian"]):
+        # Specific relevance for Microsoft PipeMagic zero-day (CVE-2025-29824)
+        if any(k in tl for k in ("pipemagic", "clfs", "cve-2025-29824")):
+            rel = (
+                "Shows attackers rapidly weaponizing new Microsoft zero-days for ransomware. "
+                "Highlights that Australian businesses must apply security updates immediately; "
+                "any unpatched Windows servers could be hijacked via PipeMagic as soon as patches are released"
+            )
+        elif any(k in tl for k in ["australia", ".au", "australian"]):
             rel = "Relevant to Australian organizations and sectors."
         elif any(k in tl for k in ["windows","apple","ios","macos","azure","aws","google cloud","vmware","esxi"]):
             rel = "Global incident impacting widely used platforms; likely to affect Australian businesses."
         # Incident keyword presence (filter to attacks/exploits/breaches)
         content_lc = f"{title} {text}".lower()
-        if not any(k in content_lc for k in incident_kw):
+        if (not accept_all) and (not any(k in content_lc for k in incident_kw)):
             await _push_log(job_id, 'info', f"filtered_non_incident: {url}")
             return False
 
         # Scoring & gating
         score = _score_candidate(title, text, url)
-        if require_au and not ("australia" in content_lc or ".au" in (url or '').lower() or "australian" in content_lc):
+        if (not accept_all) and require_au and not ("australia" in content_lc or ".au" in (url or '').lower() or "australian" in content_lc):
             await _push_log(job_id, 'info', f"filtered_non_au: {url}")
             qa_ok = False
-        elif score < min_score or (require_incident and (fields and not fields.get('incident'))):
+        elif (not accept_all) and (score < min_score or (require_incident and (fields and not fields.get('incident')))):
             await _push_log(job_id, 'info', f"filtered_low_score: {url} score={score:.1f}")
             qa_ok = False
         else:
@@ -451,7 +477,8 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
     # Paginated search rounds (30 per page)
     page_index = 0
     sem = asyncio.Semaphore(concurrency)
-    while True:
+    # Respect focus_on_seed: skip external search if true
+    while (not focus_on_seed):
         cur = await database.get_research_job(job_id)
         if not cur or cur.get('status') in ('canceled','failed','finalized','finalizing'):
             break

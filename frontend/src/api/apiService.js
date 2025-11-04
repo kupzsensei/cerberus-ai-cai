@@ -192,6 +192,10 @@ export const getExternalAIModels = async (serverType) => {
   return response.data;
 };
 
+// --- Search Provider Keys (SerpAPI/Tavily) ---
+
+// (Search Provider Keys are configured via environment. No frontend API.)
+
 export const getLocalStorageFiles = async () => {
   const response = await axios.get(`${API_BASE_URL}/local-storage/files`);
   return response.data;
