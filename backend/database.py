@@ -314,6 +314,107 @@ async def add_research_job(query: str, server_name: str, model_name: str, server
         row = await cursor.fetchone()
         return int(row[0])
 
+async def initialize_fetch_cache_db():
+    """Initializes a persistent fetch cache for API-free discovery."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS fetch_cache (
+                url TEXT PRIMARY KEY,
+                canonical_url TEXT,
+                status INTEGER,
+                text TEXT,
+                etag TEXT,
+                last_modified TEXT,
+                fetched_at TIMESTAMP NOT NULL,
+                cached_until TIMESTAMP,
+                bytes INTEGER,
+                error_count INTEGER DEFAULT 0,
+                last_error TEXT,
+                host TEXT
+            )
+        ''')
+        try:
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_fetch_cache_host ON fetch_cache(host)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_fetch_cache_canonical ON fetch_cache(canonical_url)")
+        except Exception:
+            pass
+        await db.commit()
+
+async def get_cached_page(url: str):
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute('SELECT url, canonical_url, status, text, etag, last_modified, fetched_at, cached_until, bytes, error_count, last_error, host FROM fetch_cache WHERE url = ?', (url,)) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+async def upsert_cached_page(url: str, *, text: str, status: int, etag: str | None, last_modified: str | None, host: str | None, canonical_url: str | None, ttl_hours: int, bytes_len: int | None = None):
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
+    cached_until = now + timedelta(hours=max(0, ttl_hours))
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute('''
+            INSERT INTO fetch_cache (url, canonical_url, status, text, etag, last_modified, fetched_at, cached_until, bytes, host)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(url) DO UPDATE SET
+                canonical_url=excluded.canonical_url,
+                status=excluded.status,
+                text=excluded.text,
+                etag=excluded.etag,
+                last_modified=excluded.last_modified,
+                fetched_at=excluded.fetched_at,
+                cached_until=excluded.cached_until,
+                bytes=excluded.bytes,
+                host=excluded.host
+        ''', (url, canonical_url, int(status or 0), text or '', etag, last_modified, now, cached_until, int(bytes_len or 0), host))
+        await db.commit()
+
+async def refresh_cached_page(url: str, *, ttl_hours: int):
+    """Refreshes fetched_at and cached_until for an existing cache row."""
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
+    cached_until = now + timedelta(hours=max(0, ttl_hours))
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute(
+            'UPDATE fetch_cache SET fetched_at = ?, cached_until = ? WHERE url = ?',
+            (now, cached_until, url)
+        )
+        await db.commit()
+
+async def list_cache_domains():
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute('''
+            SELECT host as domain, COUNT(*) as entries, MAX(fetched_at) as last_fetched, SUM(bytes) as total_bytes
+            FROM fetch_cache
+            GROUP BY host
+            ORDER BY entries DESC
+        ''') as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+async def list_cache_by_host(host: str, limit: int = 100, offset: int = 0):
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute('''
+            SELECT url, status, fetched_at, cached_until, bytes, etag, last_modified
+            FROM fetch_cache
+            WHERE host = ?
+            ORDER BY fetched_at DESC
+            LIMIT ? OFFSET ?
+        ''', (host, limit, offset)) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+async def delete_cache_by_host(host: str):
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute('DELETE FROM fetch_cache WHERE host = ?', (host,))
+        await db.commit()
+
+async def delete_cache_all():
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.execute('DELETE FROM fetch_cache')
+        await db.commit()
+
 async def get_research_job(job_id: int):
     async with aiosqlite.connect(DATABASE_FILE) as db:
         db.row_factory = aiosqlite.Row
@@ -398,7 +499,7 @@ async def list_research_drafts_full(job_id: int):
     async with aiosqlite.connect(DATABASE_FILE) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute('''
-            SELECT id, title, date, qa_status, qa_message, source_url, canonical_url, markdown_snippet, created_at
+            SELECT id, title, date, qa_status, qa_message, source_url, canonical_url, content_hash, markdown_snippet, created_at
             FROM research_drafts WHERE job_id = ? ORDER BY id ASC
         ''', (job_id,)) as cursor:
             rows = await cursor.fetchall()

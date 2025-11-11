@@ -14,6 +14,8 @@ const ResearchPage = () => {
   const [drafts, setDrafts] = useState([]);
   const [logs, setLogs] = useState([]);
   const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState({discovered:0,fetched:0,parsed:0,drafts:0,duplicates:0,errors:0});
+  const [domainStats, setDomainStats] = useState([]);
   // Load pipeline settings from localStorage (set by settings page)
   const [config, setConfig] = useState(null);
   useEffect(() => {
@@ -67,7 +69,13 @@ const ResearchPage = () => {
       es.onmessage = (evt) => {
         if (!evt.data) return;
         try {
-          setLogs((prev) => [...prev, JSON.parse(evt.data)]);
+          const obj = JSON.parse(evt.data);
+          if (obj && obj.level && obj.message) {
+            setLogs((prev) => [...prev, obj]);
+          } else if (obj && obj.type === 'progress' && obj.counters) {
+            setProgress(obj.counters);
+            if (Array.isArray(obj.domains)) setDomainStats(obj.domains);
+          }
         } catch {}
       };
       es.onerror = () => { es.close(); };
@@ -99,6 +107,11 @@ const ResearchPage = () => {
           <h2 className="text-xl font-semibold mb-3">Research Pipeline</h2>
           <Link to="/research/settings" className="px-3 py-1 border border-green-500 text-green-500 rounded hover:bg-green-500 hover:text-white">Settings</Link>
         </div>
+        {config?.discovery?.bypass_cache && (
+          <div className="mb-3 p-2 bg-yellow-900/40 border border-yellow-600 text-yellow-100 rounded">
+            Cache bypass is ON: this job will ignore DB cache and fetch fresh content.
+          </div>
+        )}
         <form onSubmit={startPipeline} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="prompt-area">
@@ -137,6 +150,12 @@ const ResearchPage = () => {
                                 <div className="h-2 bg-green-500 rounded" style={{width: jobStatus && jobStatus.target_count ? `${Math.min(100, Math.round((jobStatus.accepted_count||0)*100/(jobStatus.target_count||1)))}%` : '0%'}} />
                             </div>
                             <div className="text-xs text-green-300 mt-1">Accepted: {jobStatus?.accepted_count || 0} / {jobStatus?.target_count || targetCount}</div>
+                            <div className="text-xs text-gray-400 mt-1">Discovered: {progress.discovered} • Fetched: {progress.fetched} • Parsed: {progress.parsed} • Drafts: {progress.drafts} • Duplicates: {progress.duplicates} • Errors: {progress.errors}</div>
+                            {domainStats.length > 0 && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                By domain: {domainStats.map(d=> `${d.domain} ${d.fetched||0}/${d.errors||0}`).join(' • ')}
+                              </div>
+                            )}
                         </div>
                         <div className="mb-4 flex gap-3 items-center">
                             <button onClick={async ()=>{ try{ await cancelResearchJob(jobId); setRunning(false);}catch(e){} }}
@@ -169,6 +188,31 @@ const ResearchPage = () => {
                 </div>
               </div>
             </div>
+            {domainStats.length > 0 && (
+              <div className="bg-gray-900 p-3 rounded mt-4">
+                <div className="font-semibold mb-2">Domains</div>
+                <div className="overflow-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-gray-400">
+                        <th className="py-1 pr-3">Domain</th>
+                        <th className="py-1 pr-3">Fetched</th>
+                        <th className="py-1 pr-3">Errors</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {domainStats.map((d, i)=> (
+                        <tr key={i} className="border-t border-gray-800">
+                          <td className="py-1 pr-3 text-gray-300">{d.domain}</td>
+                          <td className="py-1 pr-3 text-green-300">{d.fetched||0}</td>
+                          <td className="py-1 pr-3 text-red-400">{d.errors||0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

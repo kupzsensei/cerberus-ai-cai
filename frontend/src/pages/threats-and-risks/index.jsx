@@ -14,16 +14,18 @@ const ThreatsAndRisksPage = () => {
     const [jobStatus, setJobStatus] = useState(null);
     const [drafts, setDrafts] = useState([]);
     const [logs, setLogs] = useState([]);
-    const [running, setRunning] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState({discovered:0,fetched:0,parsed:0,drafts:0,duplicates:0,errors:0});
+  const [domainStats, setDomainStats] = useState([]);
 
     // Load saved config from localStorage
-    const [config, setConfig] = useState(null);
-    useEffect(() => {
-        try {
-            const saved = localStorage.getItem('researchPipelineConfig');
-            if (saved) setConfig(JSON.parse(saved));
-        } catch {}
-    }, []);
+  const [config, setConfig] = useState(null);
+  useEffect(() => {
+      try {
+          const saved = localStorage.getItem('researchPipelineConfig');
+          if (saved) setConfig(JSON.parse(saved));
+      } catch {}
+  }, []);
     useEffect(() => {
         if (config?.ui?.default_target_count != null) {
             setTargetCount(Number(config.ui.default_target_count) || 10);
@@ -62,10 +64,18 @@ const ThreatsAndRisksPage = () => {
             const { job_id } = await startResearchJob(payload);
             setJobId(job_id);
             const es = new EventSource(`/api/research/jobs/${job_id}/events`);
-            es.onmessage = (evt) => {
-                if (!evt.data) return;
-                try { setLogs((prev) => [...prev, JSON.parse(evt.data)]); } catch {}
-            };
+      es.onmessage = (evt) => {
+        if (!evt.data) return;
+        try {
+          const obj = JSON.parse(evt.data);
+          if (obj && obj.level && obj.message) {
+            setLogs((prev) => [...prev, obj]);
+          } else if (obj && obj.type === 'progress' && obj.counters) {
+            setProgress(obj.counters);
+            if (Array.isArray(obj.domains)) setDomainStats(obj.domains);
+          }
+        } catch {}
+      };
             es.onerror = () => { es.close(); };
             const poll = async () => {
                 try {
@@ -85,13 +95,27 @@ const ThreatsAndRisksPage = () => {
     };
 
     return (
-        <div className="page-content text-green-500 border-b p-5">
-            <h1 className="font-bold">Threats and Risks</h1>
-            <div className="flex items-center justify-between">
-                <p>Run the research pipeline to draft and finalize a report.</p>
-                <Link to="/research/settings" className="px-3 py-1 border border-green-500 text-green-500 rounded-md hover:bg-green-500 hover:text-white">Settings</Link>
+    <div className="page-content text-green-500 border-b p-5">
+        <h1 className="font-bold">Threats and Risks</h1>
+        <div className="flex items-center justify-between">
+            <p>Run the research pipeline to draft and finalize a report.</p>
+            <Link to="/research/settings" className="px-3 py-1 border border-green-500 text-green-500 rounded-md hover:bg-green-500 hover:text-white">Settings</Link>
+        </div>
+        {config?.discovery?.bypass_cache && (
+            <div className="mt-3 mb-2 p-2 bg-yellow-900/40 border border-yellow-600 text-yellow-100 rounded">
+                Cache bypass is ON: this job will ignore DB cache and fetch fresh content.
             </div>
-            {error && <div className="error-message">{error}</div>}
+        )}
+        {config && (
+            <div className="mt-2 mb-2 text-xs text-gray-400">
+                <span className="text-gray-300">Active config:</span>
+                <span className="ml-2">mode={(config.discovery && config.discovery.mode) ? config.discovery.mode : ((config.search && (config.search.use_serpapi || config.search.use_tavily)) ? 'search' : 'api_free')}</span>
+                <span className="ml-3">min_score={typeof config?.scoring?.min_score === 'number' ? config.scoring.min_score : 'default'}</span>
+                <span className="ml-3">incident={config?.filters?.require_incident ? 'on' : 'off'}</span>
+                <span className="ml-3">AU filter={config?.filters?.require_au ? 'on' : 'off'}</span>
+            </div>
+        )}
+        {error && <div className="error-message">{error}</div>}
 
             <div className="mt-10 border-t border-green-800 pt-6">
                 <h2 className="text-xl font-semibold mb-3">Research Pipeline</h2>
@@ -136,13 +160,19 @@ const ThreatsAndRisksPage = () => {
                     </button>
                 </form>
                 {jobId && (
-                    <div className="mt-6">
+                  <div className="mt-6">
                         <div className="mb-2 text-sm text-green-300">Job ID: {jobId}</div>
                         <div className="mb-4">
                             <div className="h-2 w-full bg-green-950 rounded">
                                 <div className="h-2 bg-green-500 rounded" style={{width: jobStatus && jobStatus.target_count ? `${Math.min(100, Math.round((jobStatus.accepted_count||0)*100/(jobStatus.target_count||1)))}%` : '0%'}} />
                             </div>
                             <div className="text-xs text-green-300 mt-1">Accepted: {jobStatus?.accepted_count || 0} / {jobStatus?.target_count || targetCount}</div>
+                            <div className="text-xs text-gray-400 mt-1">Discovered: {progress.discovered} • Fetched: {progress.fetched} • Parsed: {progress.parsed} • Drafts: {progress.drafts} • Duplicates: {progress.duplicates} • Errors: {progress.errors}</div>
+                            {domainStats.length > 0 && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                By domain: {domainStats.map(d=> `${d.domain} ${d.fetched||0}/${d.errors||0}`).join(' • ')}
+                              </div>
+                            )}
                         </div>
                         <div className="mb-4 flex gap-3 items-center">
                             <button onClick={async ()=>{ try{ await cancelResearchJob(jobId); setRunning(false);}catch(e){} }}
@@ -175,7 +205,32 @@ const ThreatsAndRisksPage = () => {
                                 </div>
                             </div>
                         </div>
-                    </div>
+                        {domainStats.length > 0 && (
+                          <div className="bg-gray-900 p-3 rounded mt-4">
+                            <div className="font-semibold mb-2">Domains</div>
+                            <div className="overflow-auto">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="text-left text-gray-400">
+                                    <th className="py-1 pr-3">Domain</th>
+                                    <th className="py-1 pr-3">Fetched</th>
+                                    <th className="py-1 pr-3">Errors</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {domainStats.map((d, i)=> (
+                                    <tr key={i} className="border-t border-gray-800">
+                                      <td className="py-1 pr-3 text-gray-300">{d.domain}</td>
+                                      <td className="py-1 pr-3 text-green-300">{d.fetched||0}</td>
+                                      <td className="py-1 pr-3 text-red-400">{d.errors||0}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                  </div>
                 )}
             </div>
         </div>

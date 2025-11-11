@@ -15,6 +15,8 @@ from fastapi.responses import JSONResponse
 from typing import List
 import utils
 import database
+import research_pipeline
+from urllib.parse import urlparse
 import research
 import scheduler_service
 import research_pipeline
@@ -49,6 +51,7 @@ async def startup_event():
     await database.initialize_local_storage_db()
     await database.initialize_email_scheduler_db()
     await database.initialize_research_jobs_db()
+    await database.initialize_fetch_cache_db()
     
     # Start the scheduled research executor
     import asyncio
@@ -198,6 +201,112 @@ async def get_status(task_id: str):
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
     return task
+
+# --- Cache Admin Endpoints ---
+
+@app.get("/cache/domains")
+async def get_cache_domains():
+    doms = await database.list_cache_domains()
+    return {"domains": doms}
+
+@app.get("/cache")
+async def get_cache_entries(host: str | None = None, limit: int = 100, offset: int = 0):
+    if not host:
+        # convenience: return top domains if no host provided
+        doms = await database.list_cache_domains()
+        return {"domains": doms}
+    entries = await database.list_cache_by_host(host, limit=limit, offset=offset)
+    return {"host": host, "entries": entries}
+
+@app.delete("/cache")
+async def delete_cache(host: str | None = None):
+    if host:
+        await database.delete_cache_by_host(host)
+        return {"deleted": host}
+    await database.delete_cache_all()
+    return {"deleted": "all"}
+
+@app.post("/cache/refetch")
+async def refetch_cache(payload: dict):
+    url = (payload or {}).get('url')
+    force = bool((payload or {}).get('force'))
+    ttl_hours = int((payload or {}).get('ttl_hours') or utils.config.get('discovery', {}).get('cache_ttl_hours', 24))
+    if not url:
+        raise HTTPException(status_code=400, detail="Missing url")
+    # Canonicalize
+    try:
+        pu = urlparse(url)
+        cu = f"{pu.scheme}://{pu.netloc}{pu.path}".rstrip('/')
+        host = pu.netloc.lower()
+    except Exception:
+        cu = url
+        host = ''
+    etag = None; last_mod = None
+    if not force:
+        try:
+            row = await database.get_cached_page(cu)
+            if row:
+                etag = row.get('etag')
+                last_mod = row.get('last_modified')
+        except Exception:
+            pass
+    text, html, meta = await research_pipeline._http_get_text(url, etag=etag, last_modified=last_mod)
+    status = int((meta or {}).get('status') or (200 if text else 0))
+    if status == 304:
+        # Refresh TTL only
+        await database.refresh_cached_page(cu, ttl_hours=ttl_hours)
+        return {"url": cu, "status": status, "bytes": 0, "length": 0, "not_modified": True}
+    await database.upsert_cached_page(
+        cu,
+        text=text or '',
+        status=status,
+        etag=(meta or {}).get('etag') if meta else None,
+        last_modified=(meta or {}).get('last_modified') if meta else None,
+        host=host,
+        canonical_url=cu,
+        ttl_hours=ttl_hours,
+        bytes_len=int((meta or {}).get('bytes') or 0)
+    )
+    return {"url": cu, "status": status, "bytes": int((meta or {}).get('bytes') or 0), "length": len(text or '')}
+
+@app.post("/cache/refetch-domain")
+async def refetch_cache_domain(payload: dict):
+    host = (payload or {}).get('host')
+    limit = int((payload or {}).get('limit') or 50)
+    force = bool((payload or {}).get('force'))
+    ttl_hours = int((payload or {}).get('ttl_hours') or utils.config.get('discovery', {}).get('cache_ttl_hours', 24))
+    if not host:
+        raise HTTPException(status_code=400, detail="Missing host")
+    entries = await database.list_cache_by_host(host, limit=limit, offset=0)
+    updated = 0; not_modified = 0; failed = 0
+    for e in entries or []:
+        url = e.get('url')
+        etag = None; last_mod = None
+        if not force:
+            etag = e.get('etag'); last_mod = e.get('last_modified')
+        try:
+            text, html, meta = await research_pipeline._http_get_text(url, etag=etag, last_modified=last_mod)
+            status = int((meta or {}).get('status') or (200 if text else 0))
+            if status == 304:
+                not_modified += 1
+                await database.refresh_cached_page(url, ttl_hours=ttl_hours)
+            else:
+                await database.upsert_cached_page(
+                    url,
+                    text=text or '',
+                    status=status,
+                    etag=(meta or {}).get('etag') if meta else None,
+                    last_modified=(meta or {}).get('last_modified') if meta else None,
+                    host=host,
+                    canonical_url=url,
+                    ttl_hours=ttl_hours,
+                    bytes_len=int((meta or {}).get('bytes') or 0)
+                )
+                updated += 1
+        except Exception:
+            failed += 1
+            continue
+    return {"host": host, "limit": limit, "updated": updated, "not_modified": not_modified, "failed": failed}
 
 @app.delete("/task/{task_id}", status_code=200)
 async def delete_task_endpoint(task_id: str):

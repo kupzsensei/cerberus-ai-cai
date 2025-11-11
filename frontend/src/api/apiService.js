@@ -372,3 +372,32 @@ export const getEmailDeliveryLogs = async (scheduledResearchId = null) => {
   const response = await axios.get(url);
   return response.data.logs;
 };
+
+// --- Cache Admin APIs ---
+
+export const getCacheDomains = async () => {
+  const response = await axios.get(`${API_BASE_URL}/cache/domains`);
+  return response.data.domains;
+};
+
+export const getCacheEntries = async (host, limit = 100, offset = 0) => {
+  const params = new URLSearchParams({ host, limit: String(limit), offset: String(offset) });
+  const response = await axios.get(`${API_BASE_URL}/cache?${params.toString()}`);
+  return response.data;
+};
+
+export const deleteCache = async (host = null) => {
+  const url = host ? `${API_BASE_URL}/cache?host=${encodeURIComponent(host)}` : `${API_BASE_URL}/cache`;
+  const response = await axios.delete(url);
+  return response.data;
+};
+
+export const refetchCacheUrl = async (url, ttlHours = 24, force = false) => {
+  const response = await axios.post(`${API_BASE_URL}/cache/refetch`, { url, ttl_hours: ttlHours, force });
+  return response.data;
+};
+
+export const refetchCacheDomain = async (host, limit = 50, ttlHours = 24, force = false) => {
+  const response = await axios.post(`${API_BASE_URL}/cache/refetch-domain`, { host, limit, ttl_hours: ttlHours, force });
+  return response.data;
+};

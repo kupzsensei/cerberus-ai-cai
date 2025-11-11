@@ -23,7 +23,92 @@
     "research_pipeline": {
         "page_size": 30,
         "max_candidates": 150,
-        "min_score": 3.0,
+        "min_score": 1.0,
         "concurrency": 6
+    },
+    "use_search_apis": false,
+    "discovery": {
+        "mode": "api_free",
+        "recency_days": 30,
+        "crawl_depth": 1,
+        "max_pages_per_domain": 40,
+        "global_concurrency": 8,
+        "per_domain_rps": 0.5,
+        "politeness_ms": 1200,
+        "cache_ttl_hours": 24,
+        "bypass_cache": false,
+        "max_errors": 25,
+        "job_max_duration_s": 900,
+        "keyword_include": ["ransomware","breach","cyberattack","exploit","vulnerability","CVE"],
+        "keyword_exclude": ["opinion","weekly","digest","podcast","webinar"]
+    },
+    "sources": {
+        "rss_urls": [
+            "https://www.cisa.gov/news-events/cybersecurity-advisories.xml",
+            "https://www.bleepingcomputer.com/feed/",
+            "https://www.securityweek.com/feed/",
+            "https://www.darkreading.com/rss.xml",
+            "https://krebsonsecurity.com/feed/",
+            "https://isc.sans.edu/rssfeed.xml",
+            "https://www.tenable.com/blog/feed",
+            "https://www.rapid7.com/blog/feed/",
+            "https://www.qualys.com/feed/",
+            "https://unit42.paloaltonetworks.com/feed/",
+            "https://blog.talosintelligence.com/feed/",
+            "https://www.crowdstrike.com/blog/feed/",
+            "https://www.mandiant.com/resources/blog/rss.xml",
+            "https://thehackernews.com/feeds/posts/default",
+            "https://security.googleblog.com/feeds/posts/default",
+            "https://www.microsoft.com/en-us/security/blog/feed/",
+            "https://securelist.com/feed/",
+            "https://research.checkpoint.com/feed/",
+            "https://blog.cloudflare.com/tag/security/rss/"
+        ],
+        "sitemap_domains": [
+            "www.bleepingcomputer.com",
+            "www.securityweek.com",
+            "www.darkreading.com",
+            "krebsonsecurity.com",
+            "isc.sans.edu",
+            "unit42.paloaltonetworks.com",
+            "blog.talosintelligence.com",
+            "www.crowdstrike.com",
+            "www.mandiant.com"
+        ],
+        "allowlist_domains": [
+            "cisa.gov",
+            "acsc.gov.au",
+            "cyber.gov.au",
+            "msrc.microsoft.com",
+            "security.googleblog.com",
+            "cloud.google.com",
+            "unit42.paloaltonetworks.com",
+            "blog.talosintelligence.com",
+            "securelist.com",
+            "research.checkpoint.com",
+            "blog.fortinet.com",
+            "www.sentinelone.com",
+            "www.crowdstrike.com",
+            "www.mandiant.com",
+            "www.rapid7.com",
+            "www.tenable.com",
+            "blog.qualys.com",
+            "isc.sans.edu",
+            "www.bleepingcomputer.com",
+            "thehackernews.com",
+            "krebsonsecurity.com",
+            "www.securityweek.com",
+            "www.darkreading.com",
+            "arstechnica.com"
+        ]
+    },
+    "filters": {
+        "require_incident": false,
+        "require_au": false,
+        "aggregator_keywords": [
+            "op-ed","opinion","analysis","weekly","monthly","annual","roundup","digest",
+            "newsletter","webinar","podcast","press release","press-release","what we know",
+            "explainer","guide","landscape","overview","predictions","trends","report"
+        ]
     }
 }
