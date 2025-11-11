@@ -6,7 +6,8 @@ const STORAGE_KEY = 'researchPipelineConfig';
 
 const DEFAULTS = {
   ui: {
-    query_template: 'Cyber incidents impacting or likely to impact Australian businesses from {START_DATE} to {END_DATE}',
+    // Single editable query template used to build the search query
+    query_template: 'Cyber threats and risks from {START_DATE} to {END_DATE}',
     default_target_count: 12,
   },
   discovery: {
@@ -47,24 +48,34 @@ const DEFAULTS = {
     allowlist_domains: '',
   },
   search: {
-    use_serpapi: false,
+    // Only provider toggles; no focus query tail
+    use_serpapi: true,
     use_tavily: true,
-    focus_query_tail: ' (ransomware OR "data breach" OR breach OR cyberattack OR exploit OR vulnerability OR malware OR "zero-day" OR CVE)',
+    focus_query_tail: '',
+    // Keep advanced knobs but hide them in UI; retain sane defaults
     page_size: 30,
     max_candidates: 150,
     concurrency: 6,
   },
   scoring: {
+    // QA: acceptance threshold
     min_score: 2.0,
     incident_keywords: 'ransomware,data breach,breach,cyberattack,attack,exploit,vulnerability,malware,ddos,zero-day,cve-',
     au_bias: 1.2,
     domain_weights: ''
   },
   filters: {
+    // Preserve aggregator list internally (not exposed in simplified UI)
     aggregator_keywords: 'op-ed,opinion,analysis,weekly,monthly,annual,roundup,digest,newsletter,webinar,podcast,press release,press-release,what we know,explainer,guide,landscape,overview,predictions,trends,report',
     require_incident: false,
     require_au: false,
   },
+  qa: {
+    // Single prompt to instruct how QA should accept/reject incidents
+    prompt: 'QA rules: Accept only specific cyber incidents or clearly actionable, high-likelihood threats. Prefer Australian relevance (mentions of Australia/Australian or .au domains); otherwise accept global platform incidents that materially impact Australian businesses (Windows, Apple iOS/macos, cloud platforms, VMware, etc.). Reject aggregators/op-eds/weekly roundups/trend reports. Ensure a one-sentence summary is factual and concise; populate Date of Incident if present; infer Method from context (Ransomware, Data breach, Phishing, Vulnerability exploitation, DDoS, Supply chain, Credential stuffing, BEC, Vishing, Malware/Backdoor, Espionage). Include detected CVEs in Exploit Used. Keep tone neutral and analytic.',
+    enabled: true,
+  },
+  // Keep extraction + domains in config (not exposed); users can still edit JSON manually if needed
   extraction: {
     prompt: 'You are a cybersecurity analyst focused on incidents impacting Australian businesses. Return ONLY minified JSON with keys {"summary","date","targets","method","exploit_used","incident"}. Method must be one of [Ransomware, Phishing, Data breach, DDoS, Vulnerability exploitation, Supply chain compromise, Credential stuffing, Business email compromise, Vishing, Malware/Backdoor, Espionage]. Set incident=true only if this article describes an actual cyberattack/breach/exploit/outage affecting an organization, or a high-likelihood threat relevant to Australian businesses. Prefer concise, factual summary. Leave unknown fields as empty string. No prose or markdown, JSON only. Article: {ARTICLE}'
   },
@@ -117,7 +128,8 @@ const ResearchSettingsPage = () => {
           search: {
             use_serpapi: !!parsed?.search?.use_serpapi,
             use_tavily: parsed?.search?.use_tavily ?? true,
-            focus_query_tail: parsed?.search?.focus_query_tail ?? DEFAULTS.search.focus_query_tail,
+            // enforce no focus tail in simplified settings
+            focus_query_tail: '',
             page_size: parsed?.search?.page_size ?? DEFAULTS.search.page_size,
             max_candidates: parsed?.search?.max_candidates ?? DEFAULTS.search.max_candidates,
             concurrency: parsed?.search?.concurrency ?? DEFAULTS.search.concurrency,
@@ -138,6 +150,10 @@ const ResearchSettingsPage = () => {
               : (parsed?.filters?.aggregator_keywords || DEFAULTS.filters.aggregator_keywords),
             require_incident: parsed?.filters?.require_incident ?? DEFAULTS.filters.require_incident,
             require_au: parsed?.filters?.require_au ?? DEFAULTS.filters.require_au,
+          },
+          qa: {
+            prompt: parsed?.qa?.prompt || DEFAULTS.qa.prompt,
+            enabled: parsed?.qa?.enabled ?? DEFAULTS.qa.enabled,
           },
           extraction: {
             prompt: parsed?.extraction?.prompt || DEFAULTS.extraction.prompt,
@@ -183,13 +199,14 @@ const ResearchSettingsPage = () => {
       search: {
         use_serpapi: !!state.search.use_serpapi,
         use_tavily: !!state.search.use_tavily,
-        focus_query_tail: state.search.focus_query_tail,
+        focus_query_tail: '', // enforce no focus tail
         page_size: Number(state.search.page_size) || 30,
         max_candidates: Number(state.search.max_candidates) || 150,
         concurrency: Number(state.search.concurrency) || 6,
       },
       scoring: {
         min_score: Number(state.scoring.min_score) || 0,
+        // preserve keywords
         incident_keywords: (state.scoring.incident_keywords || '')
           .split(',').map(s=>s.trim()).filter(Boolean),
         au_bias: Number(state.scoring.au_bias) || 1.0,
@@ -208,25 +225,24 @@ const ResearchSettingsPage = () => {
         })(),
       },
       filters: {
+        // preserve aggregator keywords
         aggregator_keywords: (state.filters.aggregator_keywords || '')
           .split(',').map(s=>s.trim()).filter(Boolean),
         require_incident: !!state.filters.require_incident,
         require_au: !!state.filters.require_au,
       },
-      extraction: {
-        prompt: state.extraction.prompt || '',
-      },
-      domains: (state.domains.include && state.domains.include.trim().length > 0) ? {
-        include: state.domains.include.split(/\r?\n/).map(s=>s.trim()).filter(Boolean)
-      } : undefined,
+      qa: { prompt: state.qa.prompt, enabled: !!state.qa.enabled },
+      extraction: { prompt: state.extraction.prompt },
+      domains: { include: (state.domains.include || '').split('\n').map(s=>s.trim()).filter(Boolean) }
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
-    setSavedMsg('Settings saved');
+    setSavedMsg('Saved');
     setTimeout(()=>setSavedMsg(''), 1500);
   };
 
   const reset = () => {
     setState(DEFAULTS);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULTS));
   };
 
   const loadDomains = async () => {
@@ -307,8 +323,10 @@ const ResearchSettingsPage = () => {
         </button>
         <span className="text-xs text-gray-400">Sets min_score=0.5, incident/AU filters off</span>
       </div>
+      <div className="text-sm text-green-300 mb-6">Simplified: set your query, choose providers, and tune QA. Stored in your browser.</div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-4">
+        {/* 1) Query used for Searching */}
         <section className="bg-gray-900 p-4 rounded border border-gray-700">
           <div className="font-semibold mb-2">Query & Defaults</div>
           <label className="block text-sm text-green-300 mb-1">Query Template</label>
@@ -495,38 +513,21 @@ const ResearchSettingsPage = () => {
 
         {(state.discovery?.mode||'api_free')==='search' && (
         <section className="bg-gray-900 p-4 rounded border border-gray-700">
-          <div className="font-semibold mb-2">Search</div>
-          <div className="text-xs text-gray-400 mb-2">Control which web search sources are used to find incidents.</div>
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-green-300">Use SERPAPI</label>
-            <input type="checkbox" checked={state.search.use_serpapi} onChange={(e)=>setState(s=>({...s, search:{...s.search, use_serpapi:e.target.checked}}))} />
+          <div className="font-semibold mb-2">2) Search Providers</div>
+          <div className="text-xs text-gray-400 mb-4">Focus query tail is disabled for simpler, direct searches.</div>
+          <div className="flex flex-col gap-3">
+            <label className="flex items-center gap-3 text-sm text-green-300">
+              <input type="checkbox" checked={state.search.use_serpapi}
+                     onChange={(e)=>setState(s=>({...s, search:{...s.search, use_serpapi:e.target.checked}}))} />
+              Use SerpAPI
+            </label>
+            <label className="flex items-center gap-3 text-sm text-green-300">
+              <input type="checkbox" checked={state.search.use_tavily}
+                     onChange={(e)=>setState(s=>({...s, search:{...s.search, use_tavily:e.target.checked}}))} />
+              Use Tavily
+            </label>
           </div>
-          <div className="flex items-center gap-3 mt-2">
-            <label className="text-sm text-green-300">Use Tavily</label>
-            <input type="checkbox" checked={state.search.use_tavily} onChange={(e)=>setState(s=>({...s, search:{...s.search, use_tavily:e.target.checked}}))} />
-          </div>
-          <div className="mt-3">
-            <label className="block text-sm text-green-300 mb-1">Focus Query Tail</label>
-            <input type="text" value={state.search.focus_query_tail} onChange={(e)=>setState(s=>({...s, search:{...s.search, focus_query_tail:e.target.value}}))}
-                   className="w-full p-2 border border-green-600 rounded-md text-white bg-green-500/10" />
-          </div>
-          <div className="mt-3 grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-sm text-green-300 mb-1">Page Size</label>
-              <input type="number" value={state.search.page_size} onChange={(e)=>setState(s=>({...s, search:{...s.search, page_size:e.target.value}}))}
-                     className="w-full p-2 border border-green-600 rounded-md text-white bg-green-500/10" />
-            </div>
-            <div>
-              <label className="block text-sm text-green-300 mb-1">Max Candidates</label>
-              <input type="number" value={state.search.max_candidates} onChange={(e)=>setState(s=>({...s, search:{...s.search, max_candidates:e.target.value}}))}
-                     className="w-full p-2 border border-green-600 rounded-md text-white bg-green-500/10" />
-            </div>
-            <div>
-              <label className="block text-sm text-green-300 mb-1">Concurrency</label>
-              <input type="number" value={state.search.concurrency} onChange={(e)=>setState(s=>({...s, search:{...s.search, concurrency:e.target.value}}))}
-                     className="w-full p-2 border border-green-600 rounded-md text-white bg-green-500/10" />
-            </div>
-          </div>
+          {/* API keys are configured via server environment; no frontend editing */}
         </section>
         )}
 
@@ -556,6 +557,7 @@ const ResearchSettingsPage = () => {
         </section>
         )}
 
+        {/* 3) QA (enable/disable + instructions) */}
         <section className="bg-gray-900 p-4 rounded border border-gray-700">
           <div className="font-semibold mb-2">Scoring & Filters</div>
           <div className="text-xs text-gray-400 mb-2">Tighten or loosen acceptance. Higher minimum score and AU requirement reduce noise.</div>
@@ -621,6 +623,13 @@ const ResearchSettingsPage = () => {
         <button onClick={save} className="px-4 py-2 border border-green-500 text-green-500 rounded-md hover:bg-green-500 hover:text-white">Save Settings</button>
         <button onClick={reset} className="px-4 py-2 border border-gray-500 text-gray-300 rounded-md hover:bg-gray-700">Restore Defaults</button>
       </div>
+
+      {/* Simple toast indicator for settings save */}
+      {savedMsg && (
+        <div className="fixed bottom-6 right-6 bg-green-600 text-white px-4 py-2 rounded shadow-lg">
+          {savedMsg}
+        </div>
+      )}
     </div>
   );
 };

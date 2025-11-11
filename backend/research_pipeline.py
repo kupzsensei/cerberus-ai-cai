@@ -247,7 +247,8 @@ def _build_markdown_snippet(idx: int, title: str, summary: str, date: str, targe
     if relevance:
         lines.append(f"- Relevance: {relevance}\n")
     if source_url:
-        lines.append(f"- Source: {source_url}\n")
+        # Render source as a Markdown link to match desired style
+        lines.append(f"- Source: [{title}]({source_url})\n")
     lines.append("\n<br><br>\n\n")
     return "\n".join(lines)
 
@@ -329,6 +330,7 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
     # Default AU focus based on config as well
     require_au = bool(job_cfg.get('filters', {}).get('require_au', base_filters.get('require_au', True)))
     filter_low_signal = bool(job_cfg.get('filters', {}).get('filter_low_signal', base_filters.get('filter_low_signal', False)))
+
     # Domains
     include_domains_override = job_cfg.get('domains', {}).get('include') if isinstance(job_cfg.get('domains', {}), dict) else None
     include_domains = include_domains_override if include_domains_override else (allowlist_domains_cfg or research.include_domains)
@@ -404,6 +406,8 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
 
     def _is_low_signal(text: str) -> bool:
         tl = (text or "").lower()
+        if accept_all:
+            return False
         return any(k in tl for k in aggregator_kw)
 
     # Domain weights and AU bias
@@ -705,7 +709,14 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
                 exploit_used = ", ".join(filter(None, [exploit_used] + extra_c)).strip(', ')
         # Relevance
         tl = f"{title} {text}".lower(); rel = ""
-        if any(k in tl for k in ["australia", ".au", "australian"]):
+        # Specific relevance for Microsoft PipeMagic zero-day (CVE-2025-29824)
+        if any(k in tl for k in ("pipemagic", "clfs", "cve-2025-29824")):
+            rel = (
+                "Shows attackers rapidly weaponizing new Microsoft zero-days for ransomware. "
+                "Highlights that Australian businesses must apply security updates immediately; "
+                "any unpatched Windows servers could be hijacked via PipeMagic as soon as patches are released"
+            )
+        elif any(k in tl for k in ["australia", ".au", "australian"]):
             rel = "Relevant to Australian organizations and sectors."
         elif any(k in tl for k in ["windows","apple","ios","macos","azure","aws","google cloud","vmware","esxi"]):
             rel = "Global incident impacting widely used platforms; likely to affect Australian businesses."
@@ -717,10 +728,10 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
 
         # Scoring & gating
         score = _score_candidate(title, text, url)
-        if require_au and not ("australia" in content_lc or ".au" in (url or '').lower() or "australian" in content_lc):
+        if (not accept_all) and require_au and not ("australia" in content_lc or ".au" in (url or '').lower() or "australian" in content_lc):
             await _push_log(job_id, 'info', f"filtered_non_au: {url}")
             qa_ok = False
-        elif score < min_score or (require_incident and (fields and not fields.get('incident'))):
+        elif (not accept_all) and (score < min_score or (require_incident and (fields and not fields.get('incident')))):
             await _push_log(job_id, 'info', f"filtered_low_score: {url} score={score:.1f}")
             qa_ok = False
         else:

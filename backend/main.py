@@ -479,6 +479,8 @@ async def finalize_research_job(job_id: int):
     await database.update_research_job(job_id, status='finalized')
     return {"message": "Finalized", "length": len(final_text)}
 
+# (API search provider keys are configured via environment; no UI mutation endpoints)
+
 @app.post("/research")
 async def research_endpoint(
     query: str = Form(...),
