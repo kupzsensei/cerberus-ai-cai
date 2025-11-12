@@ -20,6 +20,9 @@
     "scheduler": {
         "jitter_seconds_max": 60
     },
+    "extraction": {
+        "timeout_s": 25
+    },
     "research_pipeline": {
         "page_size": 30,
         "max_candidates": 150,

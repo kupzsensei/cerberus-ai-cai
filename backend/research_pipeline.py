@@ -23,6 +23,11 @@ logger = logging.getLogger(__name__)
 # In-memory log streams for SSE
 JOB_STREAMS: dict[int, asyncio.Queue] = {}
 
+# Safety guard for environments that expect a global toggle.
+# We do not use this flag in core logic, but defining it avoids NameError
+# on nodes that may reference it inadvertently.
+accept_all: bool = False
+
 def _canon_url(url: str) -> str:
     try:
         pu = urlparse(url)
@@ -135,7 +140,7 @@ def _extract_cves(text: str) -> list[str]:
     except Exception:
         return []
 
-async def _extract_fields_with_llm(llm, content: str, prompt_template: str | None = None) -> dict:
+async def _extract_fields_with_llm(llm, content: str, prompt_template: str | None = None, timeout_s: float | None = None) -> dict:
     """Ask the LLM for strict JSON and parse it. Fallback to a naive summary on failure."""
     schema = {
         "summary": "string",
@@ -158,7 +163,10 @@ async def _extract_fields_with_llm(llm, content: str, prompt_template: str | Non
             f"Article: {content}"
         )
     try:
-        raw = (await asyncio.get_event_loop().run_in_executor(None, llm.invoke, prompt)).content
+        loop = asyncio.get_event_loop()
+        fut = loop.run_in_executor(None, llm.invoke, prompt)
+        resp = await (asyncio.wait_for(fut, timeout=timeout_s) if timeout_s and timeout_s > 0 else fut)
+        raw = resp.content
         # Trim code fences if present
         raw = raw.strip()
         if raw.startswith("```"):
@@ -207,7 +215,7 @@ async def _extract_fields_with_llm(llm, content: str, prompt_template: str | Non
             "incident": bool(data.get("incident"))
         }
         return out
-    except Exception:
+    except (asyncio.TimeoutError, Exception):
         # Fallback minimal fields
         return {
             "summary": content[:600] + ("..." if len(content) > 600 else ""),
@@ -655,10 +663,20 @@ async def run_research_job(job_id: int, seed_urls: list[str] | None = None, focu
             extraction_prompt = job_cfg.get('extraction', {}).get('prompt') if isinstance(job_cfg.get('extraction'), dict) else None
         except Exception:
             extraction_prompt = None
+        # LLM extraction timeout (seconds) from job config or backend config
+        extraction_timeout = None
+        try:
+            t_job = job_cfg.get('extraction', {}).get('timeout_s') if isinstance(job_cfg.get('extraction'), dict) else None
+            if t_job is None and hasattr(utils, 'config'):
+                t_job = utils.config.get('extraction', {}).get('timeout_s')
+            if t_job is not None:
+                extraction_timeout = float(t_job)
+        except Exception:
+            extraction_timeout = None
         fields = {}
         llm_ok = True
         try:
-            fields = await _extract_fields_with_llm(llm, text, prompt_template=extraction_prompt)
+            fields = await _extract_fields_with_llm(llm, text, prompt_template=extraction_prompt, timeout_s=extraction_timeout)
         except Exception as e:
             llm_ok = False
             await _push_log(job_id, 'warning', f"LLM extraction failed: {e}")
