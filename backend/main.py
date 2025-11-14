@@ -20,6 +20,7 @@ from urllib.parse import urlparse
 import research
 import scheduler_service
 import research_pipeline
+import folder_ingest_service
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -56,12 +57,15 @@ async def startup_event():
     # Start the scheduled research executor
     import asyncio
     asyncio.create_task(scheduler_service.scheduler_executor.run_scheduler())
+    # Start inbound folder watcher if enabled
+    asyncio.create_task(folder_ingest_service.run_ingest_loop(process_and_update_task))
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """On shutdown, close the httpx client and stop the scheduler."""
     await client.aclose()
     scheduler_service.scheduler_executor.stop_scheduler()
+    folder_ingest_service.stop()
 
 async def process_and_update_task(file_name: str, user_prompt: str, model_name: str, server_name: str, server_type: str):
     """
@@ -1271,7 +1275,32 @@ async def perform_test_scheduled_research(
             target_count = int(utils.config.get('research_pipeline', {}).get('scheduled_target_count', 10))
         except Exception:
             target_count = 10
-        job_id = await database.add_research_job(query, server_name, model_name, server_type, target_count)
+        # Force API-free RSS-only for test emails to mirror scheduled flow
+        try:
+            sources_cfg = utils.config.get('sources', {}) if hasattr(utils, 'config') else {}
+        except Exception:
+            sources_cfg = {}
+        job_config = {
+            "discovery": {
+                "mode": "api_free",
+                "recency_days": int(date_range_days)
+            },
+            "sources": {
+                "rss_urls": sources_cfg.get("rss_urls", []),
+                "sitemap_domains": []
+            },
+            "domains": {
+                "include": []
+            },
+            "search": {
+                "use_serpapi": False,
+                "use_tavily": False
+            },
+            "discovery_hints": {
+                "max_pages_per_domain": 0
+            }
+        }
+        job_id = await database.add_research_job(query, server_name, model_name, server_type, target_count, config=job_config)
         await research_pipeline.run_research_job(job_id, seed_urls=None, focus_on_seed=True)
         job = await database.get_research_job(job_id)
         result = None

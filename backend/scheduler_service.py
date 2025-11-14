@@ -189,7 +189,35 @@ class ScheduledResearchExecutor:
                 target_count = int(utils.config.get('research_pipeline', {}).get('scheduled_target_count', 10))
             except Exception:
                 target_count = 10
-            job_id = await database.add_research_job(query, server_name, model_name, server_type, target_count)
+            # Force API-free discovery focusing on RSS only for scheduled email reports
+            try:
+                sources_cfg = utils.config.get('sources', {}) if hasattr(utils, 'config') else {}
+            except Exception:
+                sources_cfg = {}
+            job_config = {
+                "discovery": {
+                    "mode": "api_free",
+                    "recency_days": int(date_range_days)
+                },
+                "sources": {
+                    "rss_urls": sources_cfg.get("rss_urls", []),
+                    "sitemap_domains": []
+                },
+                # Provide empty include list to discourage domain crawling; pipeline will prefer defaults if set
+                "domains": {
+                    "include": []
+                },
+                # Explicitly disable API search providers
+                "search": {
+                    "use_serpapi": False,
+                    "use_tavily": False
+                },
+                # Soft hint: keep domain crawling impact minimal
+                "discovery_hints": {
+                    "max_pages_per_domain": 0
+                }
+            }
+            job_id = await database.add_research_job(query, server_name, model_name, server_type, target_count, config=job_config)
             await research_pipeline.run_research_job(job_id, seed_urls=None, focus_on_seed=True)
             job = await database.get_research_job(job_id)
             result_text = None

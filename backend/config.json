@@ -113,5 +113,16 @@
             "newsletter","webinar","podcast","press release","press-release","what we know",
             "explainer","guide","landscape","overview","predictions","trends","report"
         ]
+    },
+    "inbound": {
+        "enabled": false,
+        "folder": "backend/inbox",
+        "poll_seconds": 5,
+        "stable_seconds": 2,
+        "action": "pdf_professor",
+        "server_type": "ollama",
+        "server_name": null,
+        "model_name": "gemma:7b",
+        "prompt": "Summarize key points."
     }
 }

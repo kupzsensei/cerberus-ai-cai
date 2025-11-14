@@ -1,149 +1,238 @@
-# Cerberus AI - Advanced PDF Processing, Chatbot, and Cybersecurity Intelligence Platform
+# Cerberus AI
 
-Cerberus AI is a comprehensive full-stack application designed to empower users with advanced PDF document processing, intelligent chatbot interactions, and robust cybersecurity threat intelligence capabilities. Leveraging containerization with Docker, Cerberus AI offers a seamless setup and deployment experience.
+Advanced PDF analysis, Chat, and Cybersecurity Intelligence in one full‑stack app. Cerberus AI combines a FastAPI backend with a React + Nginx frontend and offers background PDF processing (with OCR), a research pipeline for threat intelligence, an investigation tool, local file querying, a chatbot, and scheduled email reporting.
 
-## Key Features
+Screenshot: `frontend/src/assets/screenshot.png`
 
-*   **Advanced PDF Analysis & Professional Export**: Upload single or multiple PDF documents for in-depth analysis. The system intelligently extracts and processes content, providing actionable insights. Export reports to professional, high-quality PDFs with selectable text, proper formatting, and pagination.
-*   **Enhanced User Interface (UI/UX)**: Enjoy a clean, consistent, and intuitive user experience across all features, with polished styling and improved readability.
-*   **Dynamic AI Server Integration**: Effortlessly manage and switch between various Ollama and Gemini servers and their available language models directly from the intuitive frontend UI. This flexibility ensures optimal performance and model selection for diverse tasks.
-*   **Asynchronous Background Processing**: Handles large-scale PDF processing tasks efficiently in the background, preventing timeouts and ensuring a smooth user experience.
-*   **Real-time Task Monitoring**: Keep track of all PDF processing tasks with real-time status updates.
-*   **Interactive Chatbot Interface**: Engage with a powerful language model through a user-friendly chat interface for quick queries and dynamic conversations.
-*   **Threats and Risks Research**: A dedicated module for performing targeted cybersecurity threat and risk research based on specified date ranges, providing a structured overview of incidents.
-*   **Incident & Company Investigation**: Conduct in-depth investigations into specific cybersecurity incidents or gather comprehensive information about companies. The AI collates and summarizes findings from various sources.
-*   **Research & Investigation History**: Access and manage a detailed history of all past research queries and investigations, allowing for easy review and deletion of entries.
-*   **Enhanced Local File Storage**: Manage your files with an improved interface featuring group delete and download operations, and a streamlined file upload process through a dedicated modal.
-*   **Automated Email Reports**: Schedule and automatically send cybersecurity threat research reports via email. Configure SMTP settings, manage recipient lists, and set up recurring research tasks with flexible scheduling options.
-*   **Containerized Deployment**: Simplified setup and deployment across various environments using Docker and Docker Compose, ensuring consistency and portability.
+## Features
 
-## Technologies Utilized
+- PDF Professor: extract text or OCR scanned PDFs, process in background, track status, and view results.
+- AI Servers: manage Ollama and Gemini servers and pick models dynamically from the UI.
+- Research Pipeline: draft-first pipeline with scoring, AU bias, API-free discovery (RSS/Sitemaps/Crawling) or search API mode; finalize to a structured Markdown report.
+- Investigations: quick AI-driven investigations for incidents or companies.
+- Chatbot: simple conversation UI with selected model and server.
+- Local Storage: upload PDFs to a local area, batch OCR + query with a prompt, and save job history.
+- Email Scheduler: configure SMTP, recipient groups, and scheduled research jobs with delivery logs.
+- Admin Cache Tools: list domains, inspect entries, refetch or clear discovery cache.
+- Dockerized: one-command deployment with Nginx proxying `/api` to the backend.
 
-*   **Frontend**:
-    *   React.js (with Vite) - A modern JavaScript library for building user interfaces.
-    *   Nginx - High-performance web server for serving static files and API proxying.
-    *   Tailwind CSS - A utility-first CSS framework for rapid UI development.
-    *   `react-icons` - A library for popular icon packs.
-    *   `remark`, `strip-markdown` - Libraries for parsing and stripping Markdown.
-    *   `postcss-preset-env` - A PostCSS plugin to transform modern CSS into something most browsers can understand.
-*   **Backend**:
-    *   FastAPI (Python) - A fast, modern, web framework for building APIs with Python 3.7+.
-    *   Uvicorn - An ASGI server for FastAPI applications.
-    *   `python-multipart`, `pypdf`, `python-magic`, `python-dotenv`, `httpx`, `tesseract-ocr` - Essential Python libraries for file handling, PDF processing, environment management, HTTP requests, and OCR.
-    *   `apscheduler` - A library for scheduling tasks in Python applications.
-    *   SQLite - A lightweight, file-based database for efficient data storage.
-*   **Containerization**:
-    *   Docker - Platform for developing, shipping, and running applications in containers.
-    *   Docker Compose - Tool for defining and running multi-container Docker applications.
-*   **Language Model Integration**:
-    *   Ollama (external service) - Facilitates running large language models locally.
-    *   Gemini (external service) - Google's family of generative AI models.
-    *   LangChain - Framework for developing applications powered by language models.
-    *   SERPAPI (primary) + Tavily (fallback) - Web search used by research and investigation modules.
+## Architecture
 
-## Prerequisites
+- Frontend: React (Vite) built to static assets served by Nginx; Nginx proxies `/api/*` to the backend.
+- Backend: FastAPI + Uvicorn; async IO via `httpx`; persistence via SQLite (async `aiosqlite`).
+- OCR + PDF: PyMuPDF for text extraction; Tesseract OCR fallback for scanned PDFs.
+- LLMs: Ollama (local) via REST; Gemini via Google Generative AI. Research pipeline uses LangChain wrappers.
+- Discovery: API-free mode via RSS, sitemaps, and domain crawling (with politeness, caching, TTLs); or SERPAPI/Tavily when enabled.
+- Scheduling: in-process scheduler loop executes configured research jobs and emails results.
 
-Before you begin, ensure you have the following installed:
+Repository layout (high level):
 
-*   **Docker**: [Install Docker](https://docs.docker.com/get-docker/)
-*   **Docker Compose**: Included with Docker Desktop. For Linux, [install separately](https://docs.docker.com/compose/install/linux/).
-*   **Ollama (Optional)**: A running Ollama instance with your desired models pulled (e.g., `ollama pull gemma3:4b`). You will configure the Ollama server URL within the application's UI.
-    *   [Download Ollama](https://ollama.com/download)
-*   **Gemini API Key (Optional)**: A Google AI Gemini API key.
-*   **SMTP Server Access (Optional)**: Access to an SMTP server for sending automated email reports (e.g., Gmail SMTP, Outlook SMTP, or your organization's SMTP server).
+```
+backend/        FastAPI app, research pipeline, DB, scheduler
+frontend/       React app and Nginx config (Dockerized)
+docker-compose.yml   Orchestrates frontend + backend containers
+```
 
-## Setup and Installation
+## Quick Start (Docker Compose)
 
-1.  **Clone the Repository**:
-    ```bash
-    git clone https://github.com/kupzsensei/cerberus-ai-cai.git
-    cd cerberus-ai-cai
-    ```
+1) Create a `.env` in repo root for optional search/LLM keys (used by backend):
 
-2.  **Build and Run with Docker Compose**:
-    ```bash
-    docker-compose up -d --build
-    ```
-    This command builds and starts both the `backend` and `frontend` services in detached mode.
+```
+SERPAPI_API_KEY=your-serpapi-key
+TAVILY_API_KEY=your-tavily-key
+OPENROUTER_API_KEY=your-openrouter-key
+```
 
-## Usage Guide
+2) (Recommended) Persist the DB by setting the database path in `backend/config.json`:
 
-1.  **Access the Application**:
-    Open your web browser and navigate to `http://localhost:3500`.
+```
+"database_file": "database/tasks.db"
+```
 
-2.  **Configure AI Servers (First-time Setup)**:
-    *   Click the gear icon (⚙️) in the sidebar.
-    *   Add a new Ollama or Gemini server by providing a descriptive name and its URL or API key.
+3) Build and start:
 
-3.  **Select Active Server and Model**:
-    *   Use the dropdown menus in the sidebar to select your active AI server and the specific model you wish to use for interactions.
+```
+docker-compose up -d --build
+```
 
-4.  **PDF Analysis (PDF Professor)**:
-    *   Go to the "PDF Professor" section.
-    *   Drag and drop your PDF files into the designated area.
-    *   Enter a specific prompt for analysis.
-    *   Click "Process" and monitor the task status on the "Task Status" page.
+4) Open the app: http://localhost:3500
 
-5.  **Threats and Risks Research**:
-    *   Navigate to the "Threats and Risks" section.
-    *   Select a desired date range.
-    *   Click "Start Research" to find cybersecurity incidents within that period.
+- Frontend: Nginx on port 3500
+- Backend: FastAPI exposed on port 8001 (container port 8000)
 
-6.  **Incident & Company Investigation**:
-    *   Go to the "Investigate" section.
-    *   Enter a query, such as an incident name (e.g., "Allianz Life Data Breach") or a company name (e.g., "Cecuri").
-    *   The AI will perform a broad search and provide a summarized overview.
+To stop and remove containers (keep data): `docker-compose down`
+To also remove volumes (delete data): `docker-compose down -v`
 
-7.  **Manage Research & Investigation History**:
-    *   The "Research List" page displays all past date-range based research queries.
-    *   The "Investigation List" page shows all past incident/company investigations.
-    *   You can view detailed results or delete entries from these lists.
+## Configuration
 
-8.  **Local File Storage Management**:
-    *   Navigate to the \"My Files\" section in the LocalStorage menu.
-    *   Upload files using the \"Upload Files\" button which opens a dedicated modal with drag and drop functionality.
-    *   Select multiple files using checkboxes to perform group operations:
-        *   Delete multiple files at once
-        *   Download multiple files at once
-    *   View or download individual files using the action buttons on each file card.
-    *   Query selected files using the prompt area at the bottom of the page.
+`backend/config.json` controls core behavior. Key fields:
 
-9.  **Automated Email Reports (Email Scheduler)**:
-    *   Navigate to the \"Email Scheduler\" section in the sidebar.
-    *   Configure your SMTP email settings in the \"Email Configuration\" tab.
-    *   Create recipient groups and add email addresses in the \"Recipient Groups\" tab.
-    *   Set up scheduled research tasks in the \"Scheduled Research\" tab:
-        *   Choose a frequency (daily, weekly, or monthly)
-        *   Set the time for the reports to be generated
-        *   Select a recipient group to receive the reports
-        *   Configure the date range for research (e.g., last 7 days)
-        *   Optionally specify which AI model and server to use
-    *   Monitor email delivery status in the \"Delivery Logs\" tab.
-    *   Reports will be automatically generated and sent according to your schedule.
+- Paths and IO
+  - `pdf_directory`: where uploads are stored for background PDF processing
+  - `output_directory`: output artifacts (if used)
+  - `log_directory`: backend logs directory
+  - `database_file`: SQLite file path (set to `database/tasks.db` to use the compose volume)
+- Processing
+  - `chunk_size`: size of text chunks for LLM processing
+  - `tesseract_path`: optional override path to Tesseract (Docker image installs it by default)
+  - `llm.num_predict`: token/character budget for Ollama requests
+  - `concurrency.llm_max_inflight`: semaphore for concurrent LLM calls
+  - `extraction.timeout_s`: timeout when extracting fields during research
+- CORS
+  - `cors_origins`: list of allowed origins (useful for local dev without Nginx)
+- Discovery and Search
+  - `use_search_apis`: if true, allows SERPAPI/Tavily; otherwise API‑free mode
+  - `discovery`: API‑free settings (recency, crawl depth, rate limits, cache TTL, keywords)
+  - `sources`: curated RSS feeds, sitemap domains, and domain allowlist
+- Research Pipeline
+  - `research_pipeline.page_size`, `max_candidates`, `min_score`, `concurrency`
+  - `filters`: e.g., `require_incident`, `require_au`, `aggregator_keywords`
+  - `scheduler.jitter_seconds_max`: jitter before scheduled job runs
 
-## Troubleshooting Common Issues
+Environment variables (read by backend):
 
-*   **`413 Request Entity Too Large`**: This error indicates that the uploaded file size exceeds the server's limit. To resolve this, increase the `client_max_body_size` in `frontend/nginx.conf` and then rebuild the frontend service: `docker-compose up -d --build frontend`.
-*   **AI Server Connectivity Problems**:
-    1.  Verify that your Ollama or Gemini instance is running and accessible from your Docker environment.
-    2.  Ensure the AI server URL or API key configured in the application's UI is correct.
-    3.  Check the backend service logs for connection errors: `docker-compose logs backend`.
-    4.  If you have modified the database schema, you might need to recreate the database by running `docker-compose down -v && docker-compose up -d --build`. **Warning**: This action will permanently delete all existing data.
-*   **Email Sending Issues**:
-    1.  Verify that your SMTP server settings are correct in the Email Scheduler configuration.
-    2.  Ensure that your SMTP credentials are valid and have the necessary permissions.
-    3.  Check that your SMTP server is accessible from the Docker environment.
-    4.  Review the email delivery logs in the Email Scheduler's "Delivery Logs" tab for specific error messages.
-*   **Containers Failing to Start**: Inspect the logs of the problematic service for detailed error messages: `docker-compose logs <service_name>`.
+- `SERPAPI_API_KEY`: enables Google SERPAPI search
+- `TAVILY_API_KEY`: enables Tavily search fallback
+- `OPENROUTER_API_KEY`: optional for select LangChain backends
+
+## Usage (UI Walkthrough)
+
+First, configure at least one AI server:
+
+1) Open “Manage AI Servers” in the UI.
+2) Add an Ollama server: provide a name and the base URL (for example, `http://localhost:11434`). The backend appends `/api/generate` as needed.
+3) Or add a Gemini server: provide a name and the Gemini API key.
+4) You can add multiple servers and switch models per operation.
+
+PDF Professor
+
+- Upload one or multiple PDFs and provide a prompt.
+- Choose server type (Ollama/Gemini), server name, and model.
+- Background jobs appear in “Task Status”. Click a task to view the processed result.
+
+Threats and Risks Research
+
+- Enter a research query, optionally including a date range (e.g., “from 2025-01-01 to 2025-01-31”).
+- Configure target count and advanced settings in Research Settings if needed.
+- Start a job and monitor drafts and logs in real time; finalize to produce a single Markdown report.
+
+Investigations
+
+- Provide a short description of an incident or organization to investigate.
+- Results return as an AI-curated summary with references where available.
+
+Chatbot
+
+- Open the Chat view, pick a server and model, and start chatting.
+
+Local Storage
+
+- Upload PDFs to local storage.
+- Select files and submit a prompt; Cerberus OCRs each file, concatenates content, and processes with the chosen model.
+- Review job results and history from the Local Storage pages.
+
+Email Scheduler
+
+- Add an Email Config (SMTP server, port, credentials, TLS/SSL options, sender info).
+- Create Recipient Groups and add Recipients.
+- Add a Scheduled Research job: choose frequency (daily/weekly/monthly), time, window (e.g., last 7 days), server/model, and recipient group.
+- Monitor delivery status in Email Delivery Logs.
+
+## API (Selected Endpoints)
+
+Prefix: the frontend calls the backend under `/api/*` via Nginx. The backend defines these routes (subset):
+
+- PDFs: `POST /process-pdfs/`, `POST /pdfprofessor`, `GET /status`, `GET /status/{task_id}`, `DELETE /task/{task_id}`
+- Research jobs: `POST /research/jobs/start`, `GET /research/jobs/{job_id}`, `GET /research/jobs/{job_id}/drafts`, `GET /research/jobs/{job_id}/events`, `POST /research/jobs/{job_id}/finalize`, `POST /research`
+- AI servers: `GET/POST/DELETE /ollama-servers`, `GET /ollama-models?url=…`, `GET/POST/DELETE /external-ai-servers`, `GET /external-ai/models?server_type=…`
+- Research history: `GET /research`, `GET /research/{id}`, `DELETE /research/{id}`
+- Investigate: `POST /investigate`
+- Local storage: `GET /local-storage/files`, `POST /local-storage/upload`, `DELETE /local-storage/files/{filename}`, `GET /local-storage/files/{filename}`, `POST /local-storage/query`, `GET /local-storage/status/{job_id}`, `GET /local-storage/jobs`, `DELETE /local-storage/jobs/{job_id}`
+- Chat: `POST /chat`
+- Email scheduler: `POST /email-config`, `GET/PUT/DELETE /email-configs/{id}`, `GET /email-configs`
+- Recipient groups: `POST/GET /email-recipient-groups`, `GET/PUT/DELETE /email-recipient-groups/{id}`
+- Recipients: `POST /email-recipients`, `GET /email-recipients/{group_id}`, `GET/PUT/DELETE /email-recipients/{recipient_id}`
+- Scheduled research: `POST/GET /scheduled-research`, `GET /scheduled-research/{id}`, `PUT/DELETE /scheduled-research/{id}`
+- Email logs and tests: `GET /email-delivery-logs`, `POST /test-email`, `POST /test-scheduled-research`
+- Cache admin: `GET /cache/domains`, `GET/DELETE /cache`, `POST /cache/refetch`, `POST /cache/refetch-domain`
+
+OpenAPI docs are available at `/docs` on the backend (container port 8000; mapped to host 8001 when using compose).
+
+## Development (without Docker)
+
+Backend (Python 3.11)
+
+```
+cd backend
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+# optional: edit backend/config.json (set database_file, CORS origins for dev)
+uvicorn main:app --reload --port 8000
+```
+
+Frontend (Node 20)
+
+```
+cd frontend
+npm install
+npm run dev
+```
+
+Note: The dev frontend uses `API_BASE_URL = "/api"`. In production Nginx proxies `/api` to the backend. For local dev without Docker, set up a Vite proxy to `http://localhost:8000` or run the frontend behind Nginx. Alternatively, adjust the base URL temporarily for local testing.
+
+## Data & Persistence
+
+- Uploaded PDFs: `uploaded_pdfs` (mounted as a volume in Docker)
+- Logs: `logs` (volume)
+- SQLite DB: set `database_file` to `database/tasks.db` so it resides in the `database` directory (volume). This preserves data across container restarts.
+
+## Deployment Notes
+
+- Reverse proxy: The provided Nginx config in the frontend image serves static assets and proxies `/api` to the `backend` service. It includes SSE‑friendly settings and raised timeouts for long jobs.
+- OCR: The backend Docker image installs Tesseract. For bare‑metal runs, install Tesseract manually.
+- CORS: When front and back are on different origins in dev, add your frontend origin to `config.json` under `cors_origins`.
+- Resources: The research pipeline performs network fetches, OCR, and LLM calls. Consider memory/CPU limits on constrained hosts.
+
+## Security
+
+- SMTP credentials are stored in plaintext in SQLite for simplicity. For production, encrypt secrets at rest and restrict DB access.
+- When exposing the backend publicly, put it behind a trusted reverse proxy, enable TLS, and restrict CORS.
+- Gemini and search API keys should be treated as secrets and provided via environment variables.
+
+## Troubleshooting
+
+- No models listed / AI server errors
+  1) Verify the Ollama URL or Gemini API key in the UI.
+  2) Check connectivity from the backend container to the Ollama host.
+  3) Confirm your models are pulled in Ollama (e.g., `ollama pull <model>`).
+
+- OCR errors
+  - Ensure Tesseract is installed (Docker image includes it). For local, install it and update `tesseract_path` in `config.json` if needed.
+
+- Research yields few or no incidents
+  - Increase `target_count`, relax filters, or enable `use_search_apis` with valid keys.
+  - Provide `seed_urls` and set `focus_on_seed` as appropriate.
+
+- Database not persisting in Docker
+  - Set `database_file` in `backend/config.json` to `database/tasks.db` so it uses the volume.
+  - Rebuild and restart with compose.
+
+- Containers fail to start
+  - Inspect logs: `docker-compose logs backend` and `docker-compose logs frontend`.
+
+## Roadmap Ideas
+
+- Add auth and role‑based access to admin endpoints.
+- Export finalized research to branded PDFs.
+- Add Kubernetes manifests and Helm chart.
+- Add Vite dev proxy for seamless local development.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a pull request or open an issue to discuss your ideas.
+Issues and PRs are welcome. Please keep changes focused and include clear reproduction steps for bugs.
 
-## Stopping the Application
+---
 
-To stop and remove all running containers, associated networks, and volumes, execute:
-```bash
-docker-compose down -v
-```
-To preserve your data (e.g., database entries), omit the `-v` flag: `docker-compose down`.
+Cerberus AI is provided as‑is without warranty. Ensure your usage complies with data access policies of crawled sources and API providers.
+

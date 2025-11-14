@@ -194,3 +194,34 @@ The draft-first research pipeline powers `/research/jobs/*` and scheduled resear
 - `scheduled_target_count` (default 10): Target incidents when run by the scheduler.
 
 Scoring favors Australian relevance (.au TLD, AU mentions), curated domains, incident keywords, and CVE presence; it downranks obvious aggregators/opinion pieces.
+
+## Inbound Folder Ingest (scp/watch)
+
+You can enable a lightweight watcher that monitors a folder for new files pushed via scp (or dropped via a mounted SMB/NFS share) and either:
+
+- Moves PDFs into the background PDF Professor pipeline for automatic processing, or
+- Moves any files into Local Storage for manual selection in the UI.
+
+Configure it in `backend/config.json` under `inbound`:
+
+```
+"inbound": {
+  "enabled": true,
+  "folder": "backend/inbox",        // absolute or relative
+  "poll_seconds": 5,
+  "stable_seconds": 2,
+  "action": "pdf_professor",        // or "local_storage"
+  "server_type": "ollama",          // for auto processing
+  "server_name": null,               // optional: auto-pick first if null
+  "model_name": "gemma:7b",
+  "prompt": "Summarize key points."
+}
+```
+
+Usage examples:
+- scp push: `scp report.pdf user@server:/path/to/repo/backend/inbox/`
+- network share: mount a network PC folder at `/srv/inbox` and set `folder` to `/srv/inbox`.
+
+Notes:
+- `action=pdf_professor` picks up only `.pdf` files, moves them to `uploaded_pdfs/`, and schedules processing so they appear under Status.
+- `action=local_storage` moves files to `backend/local_storage/` so they appear on the Local Storage page for manual querying.
